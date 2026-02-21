@@ -1,0 +1,34 @@
+{
+    "Plan": {
+        "Node Type": "Query",
+        "PlanNodeType": "Query",
+        "Plans": [
+            {
+                "Node Type": "ResultSet",
+                "PlanNodeType": "ResultSet",
+                "Plans": [
+                    {
+                        "Node Type": "Limit",
+                        "Operators": [
+                            { "Name": "Limit", "Limit": "100" }
+                        ],
+                        "Plans": [
+                            {
+                                "Node Type": "TableFullScan",
+                                "Tables": ["users"],
+                                "Operators": [
+                                    { "Name": "TableFullScan", "ReadColumns": ["id", "name", "email"] }
+                                ],
+                                "Stats": {
+                                    "TotalTasks": 1,
+                                    "TotalBytes": 2048,
+                                    "TotalRows": 100
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,687 @@
+{
+  "name": "ydb-vscode-plugin",
+  "displayName": "YDB for VS Code",
+  "description": "YDB database support for Visual Studio Code",
+  "version": "0.1.0",
+  "publisher": "ydb",
+  "icon": "assets/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ydb-platform/ydb-vscode-plugin"
+  },
+  "bugs": {
+    "url": "https://github.com/ydb-platform/ydb-vscode-plugin/issues"
+  },
+  "homepage": "https://github.com/ydb-platform/ydb-vscode-plugin#readme",
+  "keywords": [
+    "ydb",
+    "yql",
+    "database",
+    "sql",
+    "yandex"
+  ],
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Database"
+  ],
+  "activationEvents": [
+    "onView:ydbConnections",
+    "onWebviewPanel:ydbQueryWorkspace"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ydb-explorer",
+          "title": "YDB",
+          "icon": "$(database)"
+        }
+      ],
+      "panel": [
+        {
+          "id": "ydb-dialect-converter",
+          "title": "YDB Dialect Converter",
+          "icon": "$(replace-all)"
+        }
+      ]
+    },
+    "views": {
+      "ydb-dialect-converter": [
+        {
+          "type": "webview",
+          "id": "ydbDialectConverterView",
+          "name": "Convert Dialect"
+        }
+      ],
+      "ydb-explorer": [
+        {
+          "id": "ydbConnections",
+          "name": "Connections",
+          "type": "tree"
+        },
+        {
+          "id": "ydbNavigator",
+          "name": "Navigator",
+          "type": "tree"
+        },
+        {
+          "id": "ydbDetails",
+          "name": "Details",
+          "type": "tree"
+        },
+        {
+          "id": "sessionManager",
+          "name": "Sessions",
+          "type": "tree"
+        },
+        {
+          "id": "permissions",
+          "name": "Permissions",
+          "type": "tree",
+          "when": "ydb.permissionsVisible"
+        },
+        {
+          "id": "ydbDashboard",
+          "name": "Database Load",
+          "type": "tree"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "ydb.addConnection",
+        "title": "Add Connection",
+        "category": "YDB",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ydb.removeConnection",
+        "title": "Remove Connection",
+        "category": "YDB",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "ydb.switchConnection",
+        "title": "Switch Active Connection",
+        "category": "YDB"
+      },
+      {
+        "command": "ydb.testConnection",
+        "title": "Test Connection",
+        "category": "YDB"
+      },
+      {
+        "command": "ydb.executeQuery",
+        "title": "Execute YQL Query",
+        "category": "YDB",
+        "icon": "$(play)"
+      },
+      {
+        "command": "ydb.explainQuery",
+        "title": "Explain YQL Query",
+        "category": "YDB",
+        "icon": "$(info)"
+      },
+      {
+        "command": "ydb.selectTop100",
+        "title": "Show Preview",
+        "category": "YDB"
+      },
+      {
+        "command": "ydb.makeQuery",
+        "title": "Make Query",
+        "category": "YDB"
+      },
+      {
+        "command": "ydb.makeQueryNewWindow",
+        "title": "Make Query (New Window)",
+        "category": "YDB"
+      },
+      {
+        "command": "ydb.convertDialect",
+        "title": "Convert Dialect",
+        "category": "YDB",
+        "icon": "$(replace-all)"
+      },
+      {
+        "command": "ydb.viewPermissions",
+        "title": "View Permissions",
+        "category": "YDB"
+      },
+      {
+        "command": "ydb.goToDataSource",
+        "title": "Go to Data Source",
+        "category": "YDB"
+      },
+      {
+        "command": "ydb.goToReference",
+        "title": "Go to Reference",
+        "category": "YDB"
+      },
+      {
+        "command": "ydb.detailsBack",
+        "title": "Back",
+        "category": "YDB",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "ydb.showDashboard",
+        "title": "Show Dashboard",
+        "category": "YDB",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "ydb.refreshNavigator",
+        "title": "Refresh Navigator",
+        "category": "YDB",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ydb.refreshSessions",
+        "title": "Refresh Sessions",
+        "category": "YDB",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ydb.toggleHideIdle",
+        "title": "Toggle Hide Idle Sessions",
+        "category": "YDB",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "ydb.openQueryWorkspace",
+        "title": "Open Query Workspace",
+        "category": "YDB",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "ydb.refreshDashboard",
+        "title": "Refresh Database Load",
+        "category": "YDB",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ydb.insertTablePath",
+        "title": "Insert into Path",
+        "category": "YDB"
+      },
+      {
+        "command": "ydb.startStreamingQuery",
+        "title": "Start Streaming Query",
+        "category": "YDB",
+        "icon": "$(play)"
+      },
+      {
+        "command": "ydb.stopStreamingQuery",
+        "title": "Stop Streaming Query",
+        "category": "YDB",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "ydb.viewStreamingQuerySource",
+        "title": "View Source",
+        "category": "YDB",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "ydb.refreshStreamingQueries",
+        "title": "Refresh Streaming Queries",
+        "category": "YDB",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ydb.connectProfile",
+        "title": "Connect",
+        "category": "YDB",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "ydb.disconnectProfile",
+        "title": "Disconnect",
+        "category": "YDB",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "ydb.editConnection",
+        "title": "Edit Connection",
+        "category": "YDB",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "ydb.deleteConnection",
+        "title": "Delete Connection",
+        "category": "YDB",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "ydb.setFocusedConnection",
+        "title": "Set as Focused",
+        "category": "YDB",
+        "icon": "$(star)"
+      },
+      {
+        "command": "ydb.refreshConnections",
+        "title": "Refresh Connections",
+        "category": "YDB",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ydb.createDDL",
+        "title": "Create DDL",
+        "category": "YDB",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "ydb.goToTransferTarget",
+        "title": "Go to Target",
+        "category": "YDB"
+      },
+      {
+        "command": "ydb.createRowTable",
+        "title": "New Row Table",
+        "category": "YDB",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ydb.createColumnTable",
+        "title": "New Column Table",
+        "category": "YDB",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ydb.createTopic",
+        "title": "New Topic",
+        "category": "YDB",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ydb.createView",
+        "title": "New View",
+        "category": "YDB",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ydb.createExtDsObjectStorage",
+        "title": "New Object Storage Data Source",
+        "category": "YDB",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ydb.createExtDsYdb",
+        "title": "New YDB Data Source",
+        "category": "YDB",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ydb.createExtTableCsv",
+        "title": "New CSV External Table",
+        "category": "YDB",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ydb.createExtTableJson",
+        "title": "New JSON External Table",
+        "category": "YDB",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ydb.createExtTableParquet",
+        "title": "New Parquet External Table",
+        "category": "YDB",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ydb.createTransfer",
+        "title": "New Transfer",
+        "category": "YDB",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ydb.createStreamingQuery",
+        "title": "New Streaming Query",
+        "category": "YDB",
+        "icon": "$(add)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ydb.addConnection",
+          "when": "view == ydbConnections",
+          "group": "navigation"
+        },
+        {
+          "command": "ydb.refreshConnections",
+          "when": "view == ydbConnections",
+          "group": "navigation"
+        },
+        {
+          "command": "ydb.openQueryWorkspace",
+          "when": "view == ydbNavigator",
+          "group": "navigation"
+        },
+        {
+          "command": "ydb.convertDialect",
+          "when": "view == ydbNavigator",
+          "group": "navigation"
+        },
+        {
+          "command": "ydb.refreshNavigator",
+          "when": "view == ydbNavigator",
+          "group": "navigation"
+        },
+        {
+          "command": "ydb.detailsBack",
+          "when": "view == ydbDetails && ydb.detailsHasBack",
+          "group": "navigation"
+        },
+        {
+          "command": "ydb.detailsBack",
+          "when": "view == ydbNavigator && ydb.detailsHasBack",
+          "group": "navigation"
+        },
+        {
+          "command": "ydb.refreshSessions",
+          "when": "view == sessionManager",
+          "group": "navigation"
+        },
+        {
+          "command": "ydb.toggleHideIdle",
+          "when": "view == sessionManager",
+          "group": "navigation"
+        },
+        {
+          "command": "ydb.showDashboard",
+          "when": "view == ydbDashboard",
+          "group": "navigation"
+        },
+        {
+          "command": "ydb.refreshDashboard",
+          "when": "view == ydbDashboard",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ydb.connectProfile",
+          "when": "view == ydbConnections && (viewItem == connection-disconnected || viewItem == connection-focused-disconnected)",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ydb.disconnectProfile",
+          "when": "view == ydbConnections && (viewItem == connection-connected || viewItem == connection-focused)",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ydb.setFocusedConnection",
+          "when": "view == ydbConnections && viewItem == connection-connected",
+          "group": "navigation@3"
+        },
+        {
+          "command": "ydb.editConnection",
+          "when": "view == ydbConnections",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "ydb.deleteConnection",
+          "when": "view == ydbConnections",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "ydb.connectProfile",
+          "when": "view == ydbConnections && (viewItem == connection-disconnected || viewItem == connection-focused-disconnected)",
+          "group": "inline@1"
+        },
+        {
+          "command": "ydb.disconnectProfile",
+          "when": "view == ydbConnections && (viewItem == connection-connected || viewItem == connection-focused)",
+          "group": "inline@1"
+        },
+        {
+          "command": "ydb.editConnection",
+          "when": "view == ydbConnections",
+          "group": "inline@2"
+        },
+        {
+          "command": "ydb.deleteConnection",
+          "when": "view == ydbConnections",
+          "group": "inline@3"
+        },
+        {
+          "command": "ydb.selectTop100",
+          "when": "view == ydbNavigator && (viewItem == table || viewItem == column-store)",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ydb.makeQuery",
+          "when": "view == ydbNavigator && (viewItem == table || viewItem == column-store)",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ydb.makeQueryNewWindow",
+          "when": "view == ydbNavigator && (viewItem == table || viewItem == column-store)",
+          "group": "navigation@3"
+        },
+        {
+          "command": "ydb.convertDialect",
+          "when": "view == ydbNavigator && (viewItem == table || viewItem == column-store)",
+          "group": "navigation@4"
+        },
+        {
+          "command": "ydb.insertTablePath",
+          "when": "view == ydbNavigator && viewItem =~ /^(table|column-store|folder|topic|system-view|external-datasource|external-table|resource-pool|coordination-node|view|transfer)$/",
+          "group": "navigation@5"
+        },
+        {
+          "command": "ydb.viewPermissions",
+          "when": "view == ydbNavigator && (viewItem == table || viewItem == column-store || viewItem == folder || viewItem == view || viewItem == topic || viewItem == external-datasource || viewItem == external-table || viewItem == transfer)",
+          "group": "2_permissions@1"
+        },
+        {
+          "command": "ydb.createDDL",
+          "when": "view == ydbNavigator && (viewItem == table || viewItem == column-store || viewItem == view || viewItem == transfer)",
+          "group": "navigation@6"
+        },
+        {
+          "command": "ydb.createRowTable",
+          "when": "view == ydbNavigator && (viewItem == root-tables || viewItem == folder)",
+          "group": "1_create@1"
+        },
+        {
+          "command": "ydb.createColumnTable",
+          "when": "view == ydbNavigator && (viewItem == root-tables || viewItem == folder)",
+          "group": "1_create@2"
+        },
+        {
+          "command": "ydb.createTopic",
+          "when": "view == ydbNavigator && viewItem == root-topics",
+          "group": "1_create@1"
+        },
+        {
+          "command": "ydb.createView",
+          "when": "view == ydbNavigator && viewItem == root-views",
+          "group": "1_create@1"
+        },
+        {
+          "command": "ydb.createExtDsObjectStorage",
+          "when": "view == ydbNavigator && viewItem == root-external-datasources",
+          "group": "1_create@1"
+        },
+        {
+          "command": "ydb.createExtDsYdb",
+          "when": "view == ydbNavigator && viewItem == root-external-datasources",
+          "group": "1_create@2"
+        },
+        {
+          "command": "ydb.createExtTableCsv",
+          "when": "view == ydbNavigator && viewItem == root-external-tables",
+          "group": "1_create@1"
+        },
+        {
+          "command": "ydb.createExtTableJson",
+          "when": "view == ydbNavigator && viewItem == root-external-tables",
+          "group": "1_create@2"
+        },
+        {
+          "command": "ydb.createExtTableParquet",
+          "when": "view == ydbNavigator && viewItem == root-external-tables",
+          "group": "1_create@3"
+        },
+        {
+          "command": "ydb.createTransfer",
+          "when": "view == ydbNavigator && viewItem == root-transfers",
+          "group": "1_create@1"
+        },
+        {
+          "command": "ydb.createStreamingQuery",
+          "when": "view == ydbNavigator && viewItem == root-streaming-queries",
+          "group": "1_create@1"
+        },
+        {
+          "command": "ydb.startStreamingQuery",
+          "when": "viewItem == streaming-query-stopped",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ydb.stopStreamingQuery",
+          "when": "viewItem == streaming-query-running",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ydb.viewStreamingQuerySource",
+          "when": "viewItem =~ /^streaming-query-(running|stopped)$/",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ydb.goToDataSource",
+          "when": "view == ydbDetails && viewItem == detail-datasource-link",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ydb.goToReference",
+          "when": "view == ydbDetails && viewItem == detail-reference-link",
+          "group": "inline"
+        },
+        {
+          "command": "ydb.goToTransferTarget",
+          "when": "view == ydbDetails && viewItem == detail-transfer-target-link",
+          "group": "navigation@1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "ydb.executeQuery",
+          "when": "resourceLangId == yql",
+          "group": "navigation"
+        },
+        {
+          "command": "ydb.explainQuery",
+          "when": "resourceLangId == yql",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "ydb.executeQuery",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "resourceLangId == yql"
+      },
+      {
+        "command": "ydb.openQueryWorkspace",
+        "key": "ctrl+shift+q",
+        "mac": "cmd+shift+q"
+      }
+    ],
+    "languages": [
+      {
+        "id": "yql",
+        "aliases": [
+          "YQL",
+          "yql"
+        ],
+        "extensions": [
+          ".yql"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "yql",
+        "scopeName": "source.yql",
+        "path": "./syntaxes/yql.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "YDB",
+      "properties": {
+        "ydb.maxChartRows": {
+          "type": "number",
+          "default": 50000,
+          "minimum": 100,
+          "maximum": 1000000,
+          "description": "Maximum number of rows to load for chart visualization"
+        },
+        "ydb.tlsCaCertFile": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a custom CA certificate file (PEM format) to use for TLS connections. If empty, the bundled Yandex Cloud CA certificate is used."
+        },
+        "ydb.mcpPort": {
+          "type": "number",
+          "default": 3333,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Port number for the embedded MCP (Model Context Protocol) server. Connect AI tools via: claude mcp add --transport sse ydb http://localhost:<port>/sse"
+        },
+        "ydb.ragOllamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama base URL for semantic RAG search. Leave empty to use keyword search only."
+        },
+        "ydb.ragOllamaModel": {
+          "type": "string",
+          "default": "nomic-embed-text",
+          "description": "Ollama embedding model used when indexing and searching the YQL RAG. Must match the model used to build the index."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./ && npm run copy-monaco",
+    "copy-monaco": "node scripts/copy-monaco.js",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "build-rag": "npx ts-node --project tsconfig.scripts.json scripts/build-rag-index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "@types/uuid": "^10.0.0",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^5.53.0",
+    "@typescript-eslint/parser": "^5.53.0",
+    "eslint": "^8.34.0",
+    "typescript": "^5.5.0",
+    "uuid": "^13.0.0",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.10.0",
+    "@gravity-ui/websql-autocomplete": "^13.14.0",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@ydbjs/api": "^6.0.5",
+    "@ydbjs/auth": "^6.0.5",
+    "@ydbjs/core": "^6.0.7",
+    "monaco-editor": "^0.55.1",
+    "zod": "^4.3.6"
+  }
+}
