@@ -12,6 +12,7 @@ out
 !/syntaxes/*.json
 !/.vscode/*.json
 !/scripts/copy-monaco.js
+!/scripts/esbuild.js
 .claude/
 .gemini/
 CLAUDE.md

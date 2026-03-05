@@ -654,9 +654,10 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ && npm run copy-monaco",
+    "compile": "node scripts/esbuild.js && npm run copy-monaco",
+    "typecheck": "tsc --noEmit",
     "copy-monaco": "node scripts/copy-monaco.js",
-    "watch": "tsc -watch -p ./",
+    "watch": "node scripts/esbuild.js --watch",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
@@ -664,12 +665,13 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "ts-node": "^10.9.2",
     "@types/uuid": "^10.0.0",
     "@types/vscode": "^1.75.0",
     "@typescript-eslint/eslint-plugin": "^5.53.0",
     "@typescript-eslint/parser": "^5.53.0",
+    "esbuild": "^0.27.3",
     "eslint": "^8.34.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.5.0",
     "uuid": "^13.0.0",
     "vitest": "^4.0.18"

@@ -26,6 +26,9 @@ jobs:
       - name: Compile TypeScript
         run: npm run compile
 
+      - name: Type check
+        run: npm run typecheck
+
       - name: Run tests
         run: npx vitest run
 
