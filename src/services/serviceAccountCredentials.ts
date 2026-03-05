@@ -16,7 +16,7 @@ interface ServiceAccountKey {
  */
 export class ServiceAccountCredentialsProvider extends CredentialsProvider {
     private cachedToken: string | undefined;
-    private tokenExpiresAt: number = 0;
+    private tokenExpiresAt = 0;
 
     constructor(private readonly keyFilePath: string) {
         super();

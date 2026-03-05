@@ -7,7 +7,7 @@ import { ConnectionManager } from './connectionManager';
 import { QueryService } from './queryService';
 import { SchemeService } from './schemeService';
 import { SchemeEntryType } from '../models/types';
-import { RagService, queryYdbVersion, listS3Dirs, findBestS3Dir } from './ragService';
+import { RagService, queryYdbVersion } from './ragService';
 import type { Driver } from '@ydbjs/core';
 
 /**
@@ -204,7 +204,7 @@ export class McpService implements vscode.Disposable {
                     const queue: string[] = [path ?? ''];
 
                     while (queue.length > 0) {
-                        const current = queue.shift()!;
+                        const current = queue.shift() as string; // safe: length > 0 checked
                         const entries = await schemeService.listDirectory(current);
                         for (const entry of entries) {
                             if (entry.name.startsWith('.')) { continue; }

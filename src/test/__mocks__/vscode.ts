@@ -138,7 +138,7 @@ export const window = {
 };
 
 export const commands = {
-    registerCommand: (command: string, callback: (...args: unknown[]) => unknown) => {
+    registerCommand: (_command: string, _callback: (...args: unknown[]) => unknown) => {
         return { dispose: () => {} };
     },
     executeCommand: async (..._args: unknown[]) => undefined,

@@ -75,14 +75,6 @@ describe('extractValue', () => {
     });
 
     it('extracts pairs (dict/struct)', () => {
-        const value = {
-            value: { case: undefined, value: undefined },
-            items: [],
-            pairs: [
-                { key: makeValue('textValue', 'a'), payload: makeValue('int32Value', 1) },
-                { key: makeValue('textValue', 'b'), payload: makeValue('int32Value', 2) },
-            ],
-        } as never;
         // items is empty array (falsy for length check), so we need to adjust
         const adjustedValue = {
             value: { case: undefined, value: undefined },

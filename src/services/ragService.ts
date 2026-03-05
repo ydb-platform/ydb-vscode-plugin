@@ -378,7 +378,7 @@ export async function getOllamaEmbedding(
     const data = JSON.stringify({ model, prompt: text });
     return new Promise((resolve, reject) => {
         const url = new URL('/api/embeddings', baseUrl);
-        const transport = url.protocol === 'https:' ? (require('https') as typeof https) : (require('http') as typeof https);
+        const transport = url.protocol === 'https:' ? https : http;
         const req = transport.request(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },

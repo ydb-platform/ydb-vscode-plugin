@@ -59,7 +59,8 @@ export class ConnectionManager {
     private readonly _onDidChangeConnectionStatus = new vscode.EventEmitter<string>();
     readonly onDidChangeConnectionStatus = this._onDidChangeConnectionStatus.event;
 
-    private constructor() {}
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    private constructor() { /* singleton */ }
 
     static getInstance(): ConnectionManager {
         if (!ConnectionManager.instance) {

@@ -10,11 +10,11 @@ import type { DescribeTableResult } from '@ydbjs/api/table';
 import { StatusIds_StatusCode } from '@ydbjs/api/operation';
 import type { Type, TypedValue } from '@ydbjs/api/value';
 import { anyUnpack } from '@bufbuild/protobuf/wkt';
-import { QueryResult, ColumnInfo, ExplainResult, PlanNode, QueryStatistics, StreamingQuery, TableDescription, ExternalDataSourceDescription, ExternalTableDescription, TransferDescription, ResourcePool } from '../models/types.js';
+import { QueryResult, ColumnInfo, ExplainResult, QueryStatistics, StreamingQuery, TableDescription, ExternalDataSourceDescription, ExternalTableDescription, TransferDescription, ResourcePool } from '../models/types.js';
 import { formatType } from '../utils/typeFormatter.js';
 import { extractValue } from '../utils/valueExtractor.js';
-import { parsePlanRoot, parsePlanNode } from '../utils/planParser.js';
-import { encodeVarint, decodeVarintAt, readProtobufField, readAllProtobufFields, readProtobufVarint, readProtobufString } from '../utils/protobufReader.js';
+import { parsePlanRoot } from '../utils/planParser.js';
+import { encodeVarint, readProtobufField, readAllProtobufFields, readProtobufVarint, readProtobufString } from '../utils/protobufReader.js';
 
 export class CancellationError extends Error {
     constructor() {

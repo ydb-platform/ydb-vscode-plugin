@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { YqlCompletionProvider } from '../../completionProvider';
 import { CompletionItemKind } from 'vscode';
 
@@ -31,7 +31,6 @@ describe('YqlCompletionProvider', () => {
     it('suggests keywords after SELECT', async () => {
         const items = await provider.provideCompletionItems(makeDoc('SELECT '), makePos(0, 7));
         const keywords = items.filter(i => i.kind === CompletionItemKind.Keyword);
-        const labels = keywords.map(k => k.label as string);
         // After SELECT, should suggest things like FROM, DISTINCT, etc.
         expect(keywords.length).toBeGreaterThan(0);
         // Functions should also be suggested after SELECT

@@ -5,7 +5,6 @@ import {
     readProtobufVarint,
     readProtobufString,
     readAllProtobufFields,
-    decodeVarintAt,
 } from '../../utils/protobufReader';
 
 /**

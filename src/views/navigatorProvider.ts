@@ -64,7 +64,7 @@ export class YdbNavigatorProvider implements vscode.TreeDataProvider<NavigatorIt
                 if (!this.expandedState.has(profileId)) {
                     this.expandedState.set(profileId, new Set());
                 }
-                this.expandedState.get(profileId)!.add(e.element.id);
+                this.expandedState.get(profileId)?.add(e.element.id);
             }
         });
         treeView.onDidCollapseElement(e => {
@@ -90,8 +90,6 @@ export class YdbNavigatorProvider implements vscode.TreeDataProvider<NavigatorIt
 
     /** Switch to another profile — use cached data if available */
     switchProfile(): void {
-        // Save current table names
-        const oldProfileId = this.connectionManager.getFocusedProfileId();
         // Note: focusedProfileId is already updated by the time this is called,
         // but table names were built for the previous view, so we just fire refresh
         this.cachedTableNames = [];
@@ -277,12 +275,12 @@ export class YdbNavigatorProvider implements vscode.TreeDataProvider<NavigatorIt
             if (!element) {
                 this.cachedTableNames = this.tableNamesCache.get(profileId) ?? [];
             }
-            const cached = profileCache.get(parentKey)!;
+            const cached = profileCache.get(parentKey) ?? [];
             // Restore expanded/collapsed state from tracked state
             const expanded = this.expandedState.get(profileId);
             for (const item of cached) {
                 if (item.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
-                    item.collapsibleState = expanded?.has(item.id!)
+                    item.collapsibleState = expanded?.has(item.id ?? '')
                         ? vscode.TreeItemCollapsibleState.Expanded
                         : vscode.TreeItemCollapsibleState.Collapsed;
                 }
@@ -313,7 +311,7 @@ export class YdbNavigatorProvider implements vscode.TreeDataProvider<NavigatorIt
             if (!this.childrenCache.has(profileId)) {
                 this.childrenCache.set(profileId, new Map());
             }
-            this.childrenCache.get(profileId)!.set(parentKey, items);
+            this.childrenCache.get(profileId)?.set(parentKey, items);
 
             // Track parent for each child (needed for getParent / reveal)
             if (element) {
@@ -459,25 +457,6 @@ export class YdbNavigatorProvider implements vscode.TreeDataProvider<NavigatorIt
 
             const rootSection = 'root-streaming-queries';
             const items: NavigatorItem[] = [];
-            const folders: Map<string, NavigatorItem> = new Map();
-
-            const getOrCreateFolder = (pathParts: string[]): NavigatorItem => {
-                const key = pathParts.join('/');
-                let folder = folders.get(key);
-                if (folder) {
-                    return folder;
-                }
-                folder = new NavigatorItem(
-                    pathParts[pathParts.length - 1],
-                    key,
-                    SchemeEntryType.DIRECTORY,
-                    vscode.TreeItemCollapsibleState.Collapsed,
-                    'folder',
-                    rootSection,
-                );
-                folders.set(key, folder);
-                return folder;
-            };
 
             // Build flat list — folders handled by navigator cache
             for (const query of queries) {
@@ -601,7 +580,8 @@ export class YdbNavigatorProvider implements vscode.TreeDataProvider<NavigatorIt
                 if (entry.name.startsWith('.')) {
                     continue;
                 }
-                const leafFilter = (t: SchemeEntryType) => t !== SchemeEntryType.DIRECTORY && parentAny.rootFilter!(t);
+                const rootFilter = parentAny.rootFilter as (t: SchemeEntryType) => boolean;
+                const leafFilter = (t: SchemeEntryType) => t !== SchemeEntryType.DIRECTORY && rootFilter(t);
                 if (!await this.hasMatchingChildrenRecursive(schemeService, fullPath, leafFilter)) {
                     continue;
                 }

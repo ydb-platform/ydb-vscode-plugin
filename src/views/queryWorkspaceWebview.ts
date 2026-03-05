@@ -60,7 +60,6 @@ let _extensionUri: vscode.Uri | undefined;
 let _lastActivePairKey: string | undefined;
 let _completionProvider: YqlCompletionProvider | undefined;
 let _workspaceState: vscode.Memento | undefined;
-let _connectionManager: ConnectionManager | undefined;
 let _saveTimer: ReturnType<typeof setTimeout> | undefined;
 
 const WORKSPACE_STATES_KEY = 'ydb.workspaceStates';
@@ -189,7 +188,6 @@ export function registerWorkspaceListeners(context: vscode.ExtensionContext, con
     _extensionUri = context.extensionUri;
     _completionProvider = completionProvider;
     _workspaceState = context.workspaceState;
-    _connectionManager = connectionManager;
 
     // Restore workspace counter
     const savedCounter = _workspaceState.get<number>(WORKSPACE_COUNTER_KEY, 0);

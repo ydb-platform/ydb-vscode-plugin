@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from '../services/connectionManager';
 import { QueryService } from '../services/queryService';
 import { NavigatorItem } from './navigatorItems';
-import { SchemeEntryType, TableDescription, ExternalTableDescription, TransferDescription, ResourcePool } from '../models/types';
+import { SchemeEntryType, TableDescription } from '../models/types';
 
 class DetailItem extends vscode.TreeItem {
     public dataSourcePath?: string;

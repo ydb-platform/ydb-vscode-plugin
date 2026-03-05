@@ -205,7 +205,7 @@ export async function previewTopic(connectionManager: ConnectionManager, fullPat
         let decoded = version;
         try {
             const candidate = Buffer.from(version, 'base64').toString('utf-8');
-            if (/^[a-z0-9.\-]+$/i.test(candidate)) {
+            if (/^[a-z0-9.-]+$/i.test(candidate)) {
                 decoded = candidate;
             }
         } catch {
@@ -245,7 +245,8 @@ async function viewStreamingQuerySource(connectionManager: ConnectionManager, it
     try {
         const driver = await connectionManager.getDriver();
         const queryService = new QueryService(driver);
-        const queries = await queryService.loadStreamingQueries(connectionManager.getActiveProfile()!.database);
+        const database = connectionManager.getActiveProfile()?.database ?? '';
+        const queries = await queryService.loadStreamingQueries(database);
         const query = queries.find(q => q.fullPath === path);
         const content = query?.queryText ?? `-- Source not found for ${path}`;
         const doc = await vscode.workspace.openTextDocument({ content, language: 'yql' });

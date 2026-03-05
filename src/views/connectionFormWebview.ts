@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../services/connectionManager';
-import { AuthType, AUTH_TYPE_LABELS, ConnectionProfile } from '../models/connectionProfile';
+import { AUTH_TYPE_LABELS, ConnectionProfile } from '../models/connectionProfile';
 import { RagService, detectAndEnsureRag, checkOllamaAvailable } from '../services/ragService';
 
 const panels: Map<string, vscode.WebviewPanel> = new Map();

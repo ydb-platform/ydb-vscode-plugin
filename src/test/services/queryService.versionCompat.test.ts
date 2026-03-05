@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
     encodeVarint,
     readProtobufField,
-    readProtobufVarint,
     readProtobufString,
     readAllProtobufFields,
 } from '../../utils/protobufReader';
