@@ -19,7 +19,7 @@ export function parseYdbVersion(version: string): YdbVersion | undefined {
     // Try base64 decoding
     try {
         const candidate = Buffer.from(decoded, 'base64').toString('utf-8');
-        if (/^[a-z0-9.\-]+$/i.test(candidate)) {
+        if (/^[a-z0-9.-]+$/i.test(candidate)) {
             decoded = candidate;
         }
     } catch {
