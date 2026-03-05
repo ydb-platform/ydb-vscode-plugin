@@ -15,8 +15,10 @@ tsconfig.json
 .eslintrc*
 **/.eslintrc*
 
-out/test/**
-out/test_types.*
+out/**
+!out/extension.js
+!out/extension.js.map
+!out/monaco/**
 
 upload-s3.sh
 run-tests.sh
