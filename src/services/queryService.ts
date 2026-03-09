@@ -119,13 +119,6 @@ export class QueryService {
             const parts = await this.streamExecuteQuery(queryClient, sessionId, {
                 execMode: ExecMode.EXECUTE,
                 queryContent: { syntax: Syntax.YQL_V1, text: queryText },
-                txControl: {
-                    commitTx: true,
-                    txSelector: {
-                        case: 'beginTx',
-                        value: { txMode: { case: 'serializableReadWrite', value: {} } },
-                    },
-                },
                 parameters,
             }, undefined, token);
             return this.parseResponseParts(parts);
@@ -137,13 +130,6 @@ export class QueryService {
             const parts = await this.streamExecuteQuery(queryClient, sessionId, {
                 execMode: ExecMode.EXECUTE,
                 queryContent: { syntax: Syntax.YQL_V1, text: queryText },
-                txControl: {
-                    commitTx: true,
-                    txSelector: {
-                        case: 'beginTx',
-                        value: { txMode: { case: 'serializableReadWrite', value: {} } },
-                    },
-                },
                 statsMode: StatsMode.PROFILE,
             }, undefined, token);
             const result = this.parseResponseParts(parts);
@@ -163,13 +149,6 @@ export class QueryService {
             const parts = await this.streamExecuteQuery(queryClient, sessionId, {
                 execMode: ExecMode.EXECUTE,
                 queryContent: { syntax: Syntax.YQL_V1, text: queryText },
-                txControl: {
-                    commitTx: true,
-                    txSelector: {
-                        case: 'beginTx',
-                        value: { txMode: { case: 'serializableReadWrite', value: {} } },
-                    },
-                },
             }, maxRows, token);
             const result = this.parseResponseParts(parts);
             return {
@@ -196,7 +175,7 @@ export class QueryService {
                     name: relativePath.split('/').pop() ?? relativePath,
                     fullPath: relativePath,
                     status: String(row['Status'] ?? row['status'] ?? 'UNKNOWN'),
-                    queryText: String(row['QueryText'] ?? row['query_text'] ?? ''),
+                    queryText: String(row['Text'] ?? row['QueryText'] ?? row['query_text'] ?? row['query'] ?? ''),
                     resourcePool: row['ResourcePool'] ?? row['resource_pool'] ? String(row['ResourcePool'] ?? row['resource_pool']) : undefined,
                     retryCount: row['RetryCount'] ?? row['retry_count'] ? Number(row['RetryCount'] ?? row['retry_count']) : undefined,
                     lastFailAt: row['LastFailAt'] ?? row['last_fail_at'] ? String(row['LastFailAt'] ?? row['last_fail_at']) : undefined,
