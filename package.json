@@ -209,6 +209,16 @@
         "category": "YDB"
       },
       {
+        "command": "ydb.copyPathToClipboard",
+        "title": "Copy Path to Clipboard",
+        "category": "YDB"
+      },
+      {
+        "command": "ydb.copyConnectionPathToClipboard",
+        "title": "Copy Connection/Path to Clipboard",
+        "category": "YDB"
+      },
+      {
         "command": "ydb.startStreamingQuery",
         "title": "Start Streaming Query",
         "category": "YDB",
@@ -346,6 +356,12 @@
         "icon": "$(add)"
       }
     ],
+    "submenus": [
+      {
+        "id": "ydb.pathSubmenu",
+        "label": "Path"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -471,7 +487,7 @@
           "group": "navigation@4"
         },
         {
-          "command": "ydb.insertTablePath",
+          "submenu": "ydb.pathSubmenu",
           "when": "view == ydbNavigator && viewItem =~ /^(table|column-store|folder|topic|system-view|external-datasource|external-table|resource-pool|coordination-node|view|transfer)$/",
           "group": "navigation@5"
         },
@@ -483,7 +499,7 @@
         {
           "command": "ydb.createDDL",
           "when": "view == ydbNavigator && (viewItem == table || viewItem == column-store || viewItem == view || viewItem == transfer)",
-          "group": "navigation@6"
+          "group": "navigation@7"
         },
         {
           "command": "ydb.createRowTable",
@@ -569,6 +585,20 @@
           "command": "ydb.goToTransferTarget",
           "when": "view == ydbDetails && viewItem == detail-transfer-target-link",
           "group": "navigation@1"
+        }
+      ],
+      "ydb.pathSubmenu": [
+        {
+          "command": "ydb.insertTablePath",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ydb.copyPathToClipboard",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ydb.copyConnectionPathToClipboard",
+          "group": "navigation@3"
         }
       ],
       "editor/title": [

@@ -7,6 +7,15 @@ import { ConnectionsProvider, ConnectionItem } from '../views/connectionsProvide
 import { showConnectionForm } from '../views/connectionFormWebview';
 import { RagService } from '../services/ragService';
 
+const DOUBLE_CLICK_DELAY_MS = 400;
+let _lastClickedProfileId: string | undefined;
+let _lastClickTime = 0;
+
+export function _resetDoubleClickState(): void {
+    _lastClickedProfileId = undefined;
+    _lastClickTime = 0;
+}
+
 export function registerConnectionCommands(
     context: vscode.ExtensionContext,
     connectionManager: ConnectionManager,
@@ -94,18 +103,14 @@ async function testConnectionCommand(connectionManager: ConnectionManager): Prom
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: `Testing connection to ${profile.name}...`, cancellable: true },
             async (_progress, token) => {
-                const ok = await connectionManager.testConnection(profile, token);
-                if (ok) {
-                    vscode.window.showInformationMessage(`Connection to "${profile.name}" successful.`);
-                } else {
-                    vscode.window.showErrorMessage(`Connection to "${profile.name}" failed.`);
-                }
+                await connectionManager.testConnection(profile, token);
+                vscode.window.showInformationMessage(`Connection to "${profile.name}" successful.`);
             },
         );
     } catch (err: unknown) {
         if (err instanceof CancellationError) { return; }
         const message = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(`Connection test failed: ${message}`);
+        vscode.window.showErrorMessage(`Connection to "${profile.name}" failed: ${message}`);
     }
 }
 
@@ -156,14 +161,18 @@ async function deleteConnection(connectionManager: ConnectionManager, item?: Con
 async function setFocusedConnection(connectionManager: ConnectionManager, item?: ConnectionItem): Promise<void> {
     if (!item) { return; }
 
+    const now = Date.now();
+    const isDoubleClick = item.profile.id === _lastClickedProfileId && (now - _lastClickTime) < DOUBLE_CLICK_DELAY_MS;
+    _lastClickedProfileId = item.profile.id;
+    _lastClickTime = now;
+
+    if (isDoubleClick && !connectionManager.isConnected(item.profile.id)) {
+        await connectProfile(connectionManager, item);
+        return;
+    }
+
     try {
-        await vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Notification, title: `Setting ${item.profile.name} as focused...`, cancellable: true },
-            async () => {
-                await connectionManager.setFocusedProfile(item.profile.id);
-            },
-        );
-        vscode.window.showInformationMessage(`"${item.profile.name}" is now the focused connection.`);
+        await connectionManager.setFocusedProfile(item.profile.id);
     } catch (err: unknown) {
         if (err instanceof CancellationError) { return; }
         const message = err instanceof Error ? err.message : String(err);

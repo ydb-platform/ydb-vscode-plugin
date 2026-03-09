@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as grpc from '@grpc/grpc-js';
+import * as tls from 'tls';
 import * as http from 'http';
 import * as https from 'https';
 import { Driver } from '@ydbjs/core';
@@ -29,12 +30,39 @@ const REPLICATION_SERVICE_PATH = '/Ydb.Replication.V1.ReplicationService';
 
 const PLAN2SVG_TIMEOUT_MS = 30_000;
 
-export function fetchPlanSvg(monitoringUrl: string, planJson: string, authToken?: string): Promise<string> {
+interface YdbIssue {
+    message?: string;
+    issues?: YdbIssue[];
+}
+
+export function flattenIssues(issues: YdbIssue[]): string {
+    const messages: string[] = [];
+    function collect(list: YdbIssue[]) {
+        for (const issue of list) {
+            if (issue.message) {
+                messages.push(issue.message);
+            }
+            if (issue.issues?.length) {
+                collect(issue.issues);
+            }
+        }
+    }
+    collect(issues);
+    return messages.join('; ');
+}
+
+export function fetchPlanSvg(monitoringUrl: string, planJson: string, database: string, authToken?: string): Promise<string> {
     const base = monitoringUrl.endsWith('/') ? monitoringUrl : monitoringUrl + '/';
     const url = new URL('viewer/plan2svg', base);
+    if (database) {
+        url.searchParams.set('database', database);
+    }
     const transport = url.protocol === 'https:' ? https : http;
 
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'image/svg+xml',
+    };
     if (authToken) {
         headers['Authorization'] = authToken;
     }
@@ -66,9 +94,20 @@ export function fetchPlanSvg(monitoringUrl: string, planJson: string, authToken?
 
 export class QueryService {
     private driver: Driver;
+    private rawGrpcCredentials: grpc.ChannelCredentials;
 
     constructor(driver: Driver) {
         this.driver = driver;
+        // Build gRPC credentials once, reusing the same CA bundle as the Driver
+        const secureOptions = driver.options.secureOptions;
+        if (!driver.isSecure) {
+            this.rawGrpcCredentials = grpc.credentials.createInsecure();
+        } else if (secureOptions) {
+            const secureContext = tls.createSecureContext(secureOptions);
+            this.rawGrpcCredentials = grpc.credentials.createFromSecureContext(secureContext);
+        } else {
+            this.rawGrpcCredentials = grpc.credentials.createSsl();
+        }
     }
 
     async executeQuery(
@@ -628,13 +667,8 @@ export class QueryService {
 
 
     private createRawGrpcClient(): grpc.Client {
-        const isSecure = this.driver.isSecure;
-        // Extract host:port from the driver - use the endpoint from connection string
-        const credentials = isSecure
-            ? grpc.credentials.createSsl()
-            : grpc.credentials.createInsecure();
         const endpoint = this.driver.cs.host;
-        return new grpc.Client(endpoint, credentials);
+        return new grpc.Client(endpoint, this.rawGrpcCredentials);
     }
 
     private async getRawMetadata(): Promise<grpc.Metadata> {
@@ -695,7 +729,7 @@ export class QueryService {
 
             for await (const part of stream) {
                 if (part.status !== StatusIds_StatusCode.STATUS_CODE_UNSPECIFIED && part.status !== StatusIds_StatusCode.SUCCESS) {
-                    const issues = (part.issues ?? []).map((i: { message?: string }) => i.message).join('; ');
+                    const issues = flattenIssues(part.issues ?? []);
                     throw new Error(`Query failed: ${StatusIds_StatusCode[part.status]}${issues ? ': ' + issues : ''}`);
                 }
                 parts.push(part);

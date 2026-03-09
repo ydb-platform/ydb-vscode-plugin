@@ -1,5 +1,6 @@
 .git/**
 .gitignore
+**/.gitignore
 .claude/**
 .gemini/**
 .openspec/**
@@ -22,6 +23,7 @@ out/**
 
 upload-s3.sh
 run-tests.sh
+build-vsix.sh
 scripts/**
 
 node_modules/**

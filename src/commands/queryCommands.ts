@@ -20,6 +20,18 @@ export function registerQueryCommands(
         vscode.commands.registerCommand('ydb.makeQuery', (item: NavigatorItem) => makeQueryInWorkspace(connectionManager, item.fullPath)),
         vscode.commands.registerCommand('ydb.makeQueryNewWindow', (item: NavigatorItem) => makeQueryInNewWorkspace(connectionManager, item.fullPath)),
         vscode.commands.registerCommand('ydb.insertTablePath', (item: NavigatorItem) => insertTextIntoWorkspace(connectionManager, item.fullPath)),
+        vscode.commands.registerCommand('ydb.copyPathToClipboard', (item: NavigatorItem) => {
+            vscode.env.clipboard.writeText(item.fullPath);
+            vscode.window.showInformationMessage(`Copied: ${item.fullPath}`);
+        }),
+        vscode.commands.registerCommand('ydb.copyConnectionPathToClipboard', (item: NavigatorItem) => {
+            const profile = connectionManager.getActiveProfile();
+            const connectionName = profile?.name ?? 'unknown';
+            const pathWithoutLeadingSlash = item.fullPath.replace(/^\//, '');
+            const text = `"${connectionName}"."${pathWithoutLeadingSlash}"`;
+            vscode.env.clipboard.writeText(text);
+            vscode.window.showInformationMessage(`Copied: ${text}`);
+        }),
         vscode.commands.registerCommand('ydb.executeQueryFromEditor', () => executeQueryFromEditor()),
         vscode.commands.registerCommand('ydb.startStreamingQuery', (item: NavigatorItem) => startStreamingQuery(connectionManager, item)),
         vscode.commands.registerCommand('ydb.stopStreamingQuery', (item: NavigatorItem) => stopStreamingQuery(connectionManager, item)),

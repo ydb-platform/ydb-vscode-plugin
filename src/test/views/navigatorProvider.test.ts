@@ -4,10 +4,10 @@ import { NavigatorItem } from '../../views/navigatorItems';
 import { TreeItemCollapsibleState } from 'vscode';
 
 vi.mock('../../services/queryService', () => ({
-    QueryService: vi.fn().mockImplementation(() => ({
-        loadStreamingQueries: vi.fn().mockResolvedValue([]),
-        loadResourcePools: vi.fn().mockResolvedValue([]),
-    })),
+    QueryService: class {
+        loadStreamingQueries = vi.fn().mockResolvedValue([]);
+        loadResourcePools = vi.fn().mockResolvedValue([]);
+    },
     CancellationError: class CancellationError extends Error {},
 }));
 
