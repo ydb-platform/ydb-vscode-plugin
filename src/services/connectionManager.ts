@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as tls from 'tls';
 import { Driver } from '@ydbjs/core';
+
+const log = vscode.window.createOutputChannel('YDB Connection', { log: true });
 import { AnonymousCredentialsProvider } from '@ydbjs/auth/anonymous';
 import { StaticCredentialsProvider } from '@ydbjs/auth/static';
 import { AccessTokenCredentialsProvider } from '@ydbjs/auth/access-token';
@@ -14,10 +17,13 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Yandex Cloud CA certificate bundled with the extension
 function loadYandexCloudCa(): Buffer | undefined {
+    const certPath = path.join(__dirname, '..', 'certs', 'yandex-cloud-ca.pem');
     try {
-        const certPath = path.join(__dirname, '..', '..', 'certs', 'yandex-cloud-ca.pem');
-        return fs.readFileSync(certPath);
-    } catch {
+        const buf = fs.readFileSync(certPath);
+        log.info(`[TLS] Yandex Cloud CA loaded from ${certPath} (${buf.length} bytes)`);
+        return buf;
+    } catch (err) {
+        log.warn(`[TLS] Yandex Cloud CA not found at ${certPath}: ${err instanceof Error ? err.message : String(err)}`);
         return undefined;
     }
 }
@@ -35,6 +41,21 @@ function loadCustomCa(): Buffer | undefined {
         vscode.window.showWarningMessage(`YDB: Could not read custom CA cert file "${certFile}": ${err instanceof Error ? err.message : String(err)}`);
         return undefined;
     }
+}
+
+/**
+ * Builds a PEM CA bundle from multiple sources.
+ * Ensures proper newline separators between PEM blocks.
+ */
+export function buildCaBundle(sources: (string | Buffer | undefined)[]): Buffer {
+    const pems: string[] = [];
+    for (const src of sources) {
+        if (src === undefined) {
+            continue;
+        }
+        pems.push(typeof src === 'string' ? src : src.toString('utf-8'));
+    }
+    return Buffer.from(pems.join('\n'));
 }
 
 const PROFILES_KEY = 'ydb.connectionProfiles';
@@ -102,6 +123,10 @@ export class ConnectionManager {
         return this.profiles.find(p => p.id === this.focusedProfileId);
     }
 
+    getProfileById(id: string): ConnectionProfile | undefined {
+        return this.profiles.find(p => p.id === id);
+    }
+
     isConnected(id: string): boolean {
         return this.connectedProfileIds.has(id);
     }
@@ -116,26 +141,45 @@ export class ConnectionManager {
 
     private getSecureOptions(secure: boolean, profileCaCertFile?: string): { ca: Buffer } | undefined {
         if (!secure) {
+            log.info('[TLS] secure=false, using plaintext gRPC');
             return undefined;
         }
+
+        // Build CA bundle: system roots + Yandex Cloud CA + any custom certs.
+        // Always include system roots so that corporate/self-signed certs trusted
+        // by the OS are not blocked when we add extra CAs.
+        const systemCAs = tls.rootCertificates;
+        log.info(`[TLS] system root CAs: ${systemCAs.length}`);
+
+        const sources: (string | Buffer | undefined)[] = [systemCAs.join('\n')];
+
+        if (YANDEX_CLOUD_CA) {
+            log.info('[TLS] adding Yandex Cloud CA to bundle');
+            sources.push(YANDEX_CLOUD_CA);
+        } else {
+            log.warn('[TLS] Yandex Cloud CA not available');
+        }
+
+        // Global setting
+        const custom = loadCustomCa();
+        if (custom) {
+            log.info('[TLS] adding global custom CA');
+            sources.push(custom);
+        }
+
         // Per-profile cert has highest priority
         if (profileCaCertFile) {
             try {
-                return { ca: fs.readFileSync(profileCaCertFile) };
+                sources.push(fs.readFileSync(profileCaCertFile, 'utf-8'));
+                log.info(`[TLS] adding per-profile CA from ${profileCaCertFile}`);
             } catch (err) {
                 vscode.window.showWarningMessage(`YDB: Could not read CA cert "${profileCaCertFile}": ${err instanceof Error ? err.message : String(err)}`);
             }
         }
-        // Then global setting
-        const custom = loadCustomCa();
-        if (custom) {
-            return { ca: custom };
-        }
-        // Fallback to bundled Yandex Cloud CA
-        if (YANDEX_CLOUD_CA) {
-            return { ca: YANDEX_CLOUD_CA };
-        }
-        return undefined;
+
+        const bundle = buildCaBundle(sources);
+        log.info(`[TLS] CA bundle total size: ${bundle.length} bytes`);
+        return { ca: bundle };
     }
 
     private buildConnectionString(profile: Pick<ConnectionProfile, 'endpoint' | 'host' | 'port' | 'database' | 'secure'>): string {
@@ -295,21 +339,25 @@ export class ConnectionManager {
         return driver;
     }
 
-    async testConnection(profile: Omit<ConnectionProfile, 'id'>, token?: vscode.CancellationToken): Promise<boolean> {
+    async testConnection(profile: Omit<ConnectionProfile, 'id'>, token?: vscode.CancellationToken): Promise<void> {
         if (token?.isCancellationRequested) {
             throw new CancellationError();
         }
 
+        log.show(true);
         const connectionString = this.buildConnectionString(profile as ConnectionProfile);
+        log.info(`[testConnection] connectionString=${connectionString} authType=${(profile as ConnectionProfile).authType}`);
+
         const credentialsProvider = this.createCredentialsProvider(profile as ConnectionProfile, connectionString);
         const secureOptions = this.getSecureOptions(profile.secure, profile.tlsCaCertFile);
         const driver = new Driver(connectionString, { credentialsProvider, secureOptions });
 
         try {
             await this.readyWithCancellation(driver, token);
-            return true;
-        } catch {
-            return false;
+            log.info('[testConnection] OK');
+        } catch (err) {
+            log.error(`[testConnection] FAILED: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+            throw err;
         } finally {
             driver.close();
         }

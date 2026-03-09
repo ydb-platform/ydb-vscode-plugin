@@ -212,6 +212,35 @@ describe('ConnectionManager', () => {
         });
     });
 
+    describe('getProfileById', () => {
+        it('returns undefined for unknown id', () => {
+            expect(manager.getProfileById('nonexistent')).toBeUndefined();
+        });
+
+        it('returns the matching profile', async () => {
+            const profile = await manager.addProfile({
+                name: 'Test',
+                endpoint: 'grpc://host:2135',
+                database: '/db',
+                authType: 'anonymous',
+                secure: false,
+            });
+            expect(manager.getProfileById(profile.id)).toEqual(profile);
+        });
+
+        it('returns undefined after profile is deleted', async () => {
+            const profile = await manager.addProfile({
+                name: 'ToDelete',
+                endpoint: 'grpc://host:2135',
+                database: '/db',
+                authType: 'anonymous',
+                secure: false,
+            });
+            await manager.removeProfile(profile.id);
+            expect(manager.getProfileById(profile.id)).toBeUndefined();
+        });
+    });
+
     describe('dispose', () => {
         it('cleans up without error', async () => {
             await expect(manager.dispose()).resolves.not.toThrow();

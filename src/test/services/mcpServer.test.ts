@@ -167,7 +167,7 @@ describe('McpService', () => {
 
         it('returns query results on success', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
-            vi.spyOn(manager, 'getDriver').mockResolvedValue({} as never);
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
             vi.spyOn(QueryService.prototype, 'executeQuery').mockResolvedValue({
                 columns: [{ name: 'id', type: 'Int32' }],
                 rows: [{ id: 42 }],
@@ -182,7 +182,7 @@ describe('McpService', () => {
 
         it('returns error text when query fails', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
-            vi.spyOn(manager, 'getDriver').mockResolvedValue({} as never);
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
             vi.spyOn(QueryService.prototype, 'executeQuery').mockRejectedValue(new Error('network timeout'));
 
             const result = await invokeTool(manager, 'ydb_query', { connection: 'dev', sql: 'SELECT 1' });
@@ -200,7 +200,7 @@ describe('McpService', () => {
 
         it('returns table schema on success', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
-            vi.spyOn(manager, 'getDriver').mockResolvedValue({} as never);
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
             vi.spyOn(QueryService.prototype, 'describeTable').mockResolvedValue({
                 columns: [{ name: 'id', type: 'Int32', notNull: true }, { name: 'val', type: 'Utf8', notNull: false }],
                 primaryKeys: ['id'],
@@ -225,7 +225,7 @@ describe('McpService', () => {
 
         it('returns directory entries with string type names', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
-            vi.spyOn(manager, 'getDriver').mockResolvedValue({} as never);
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
             vi.spyOn(SchemeService.prototype, 'listDirectory').mockResolvedValue([
                 { name: 'orders', type: 2 },   // TABLE
                 { name: 'archive', type: 1 },   // DIRECTORY
@@ -242,7 +242,7 @@ describe('McpService', () => {
 
         it('filters out entries whose names start with "."', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
-            vi.spyOn(manager, 'getDriver').mockResolvedValue({} as never);
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
             vi.spyOn(SchemeService.prototype, 'listDirectory').mockResolvedValue([
                 { name: 'orders', type: 2 },
                 { name: '.sys', type: 1 },
@@ -258,11 +258,104 @@ describe('McpService', () => {
 
         it('passes empty string when path is omitted', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
-            vi.spyOn(manager, 'getDriver').mockResolvedValue({} as never);
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
             const spy = vi.spyOn(SchemeService.prototype, 'listDirectory').mockResolvedValue([]);
 
             await invokeTool(manager, 'ydb_list_directory', { connection: 'dev' });
             expect(spy).toHaveBeenCalledWith('');
+        });
+    });
+
+    // --- ydb_connection_params ---
+
+    describe('ydb_connection_params tool', () => {
+        it('returns error when connection is not found', async () => {
+            const result = await invokeTool(manager, 'ydb_connection_params', { connection: 'ghost' });
+            expect(result).toContain('"ghost" not found');
+        });
+
+        it('returns raw params for anonymous connection', async () => {
+            await manager.addProfile({ name: 'local', endpoint: 'localhost:2135', database: '/local', authType: 'anonymous', secure: false });
+            const result = await invokeTool(manager, 'ydb_connection_params', { connection: 'local' });
+            const parsed = JSON.parse(result);
+            expect(parsed.raw.endpoint).toBe('grpc://localhost:2135');
+            expect(parsed.raw.database).toBe('/local');
+            expect(parsed.raw.authType).toBe('anonymous');
+            expect(parsed.raw.secure).toBe(false);
+        });
+
+        it('returns grpcs scheme for secure connection', async () => {
+            await manager.addProfile({ name: 'prod', endpoint: 'ydb.example.com:2135', database: '/prod', authType: 'anonymous', secure: true });
+            const result = await invokeTool(manager, 'ydb_connection_params', { connection: 'prod' });
+            const parsed = JSON.parse(result);
+            expect(parsed.raw.endpoint).toMatch(/^grpcs:\/\//);
+        });
+
+        it('includes serviceAccountKeyFile in raw for serviceAccount auth', async () => {
+            await manager.addProfile({
+                name: 'sa', endpoint: 'ydb.example.com:2135', database: '/db',
+                authType: 'serviceAccount', secure: true,
+                serviceAccountKeyFile: '/home/user/key.json',
+            });
+            const result = await invokeTool(manager, 'ydb_connection_params', { connection: 'sa' });
+            const parsed = JSON.parse(result);
+            expect(parsed.raw.serviceAccountKeyFile).toBe('/home/user/key.json');
+        });
+
+        it('includes username but not password for static auth', async () => {
+            await manager.addProfile({
+                name: 'static', endpoint: 'ydb.example.com:2135', database: '/db',
+                authType: 'static', secure: false,
+                username: 'alice', password: 'secret',
+            });
+            const result = await invokeTool(manager, 'ydb_connection_params', { connection: 'static' });
+            const parsed = JSON.parse(result);
+            expect(parsed.raw.username).toBe('alice');
+            expect(JSON.stringify(parsed)).not.toContain('secret');
+        });
+
+        it('does not include token value for token auth', async () => {
+            await manager.addProfile({
+                name: 'tok', endpoint: 'ydb.example.com:2135', database: '/db',
+                authType: 'token', secure: true, token: 'super-secret-token',
+            });
+            const result = await invokeTool(manager, 'ydb_connection_params', { connection: 'tok' });
+            expect(result).not.toContain('super-secret-token');
+            const parsed = JSON.parse(result);
+            expect(parsed.raw.tokenNote).toBeDefined();
+        });
+
+        it('builds correct ydb CLI command with sa-key-file', async () => {
+            await manager.addProfile({
+                name: 'cloud', endpoint: 'lb.example.ydb.mdb.yandexcloud.net:2135', database: '/ru/prod/mydb',
+                authType: 'serviceAccount', secure: true,
+                serviceAccountKeyFile: '/home/user/key.json',
+            });
+            const result = await invokeTool(manager, 'ydb_connection_params', { connection: 'cloud' });
+            const parsed = JSON.parse(result);
+            expect(parsed.ydbCli).toContain('ydb');
+            expect(parsed.ydbCli).toContain('-e grpcs://lb.example.ydb.mdb.yandexcloud.net:2135');
+            expect(parsed.ydbCli).toContain('-d /ru/prod/mydb');
+            expect(parsed.ydbCli).toContain('--sa-key-file /home/user/key.json');
+            expect(parsed.ydbCli).toContain('yql -s');
+        });
+
+        it('builds correct ydb CLI command for metadata auth', async () => {
+            await manager.addProfile({ name: 'vm', endpoint: 'internal:2135', database: '/db', authType: 'metadata', secure: false });
+            const result = await invokeTool(manager, 'ydb_connection_params', { connection: 'vm' });
+            const parsed = JSON.parse(result);
+            expect(parsed.ydbCli).toContain('--use-metadata-credentials');
+        });
+
+        it('includes tlsCaCertFile in raw when set', async () => {
+            await manager.addProfile({
+                name: 'tls', endpoint: 'ydb.example.com:2135', database: '/db',
+                authType: 'anonymous', secure: true,
+                tlsCaCertFile: '/etc/ssl/custom-ca.pem',
+            });
+            const result = await invokeTool(manager, 'ydb_connection_params', { connection: 'tls' });
+            const parsed = JSON.parse(result);
+            expect(parsed.raw.tlsCaCertFile).toBe('/etc/ssl/custom-ca.pem');
         });
     });
 
@@ -276,7 +369,7 @@ describe('McpService', () => {
 
         it('recursively collects all non-directory entries with string types', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
-            vi.spyOn(manager, 'getDriver').mockResolvedValue({} as never);
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
             vi.spyOn(SchemeService.prototype, 'listDirectory').mockImplementation(async (path: string) => {
                 if (path === '') {
                     return [
@@ -299,7 +392,7 @@ describe('McpService', () => {
 
         it('filters out entries whose names start with "."', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
-            vi.spyOn(manager, 'getDriver').mockResolvedValue({} as never);
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
             vi.spyOn(SchemeService.prototype, 'listDirectory').mockResolvedValue([
                 { name: '.sys', type: 1 },
                 { name: 'orders', type: 2 },
@@ -314,7 +407,7 @@ describe('McpService', () => {
 
         it('respects limit and offset', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
-            vi.spyOn(manager, 'getDriver').mockResolvedValue({} as never);
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
             vi.spyOn(SchemeService.prototype, 'listDirectory').mockResolvedValue([
                 { name: 't1', type: 2 },
                 { name: 't2', type: 2 },
@@ -333,7 +426,7 @@ describe('McpService', () => {
 
         it('returns error text when SchemeService throws', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
-            vi.spyOn(manager, 'getDriver').mockResolvedValue({} as never);
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
             vi.spyOn(SchemeService.prototype, 'listDirectory').mockRejectedValue(new Error('permission denied'));
 
             const result = await invokeTool(manager, 'ydb_list_all', { connection: 'dev' });

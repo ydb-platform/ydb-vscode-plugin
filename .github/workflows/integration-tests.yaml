@@ -1,0 +1,27 @@
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+      - release*
+  pull_request:
+    types: [opened, reopened, edited, synchronize]
+
+jobs:
+  integration-tests:
+    name: Integration tests (YDB + MinIO)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Run integration tests
+        run: bash integration-tests/run-tests.sh

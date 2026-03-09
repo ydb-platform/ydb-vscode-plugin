@@ -134,6 +134,11 @@ export const window = {
         append: () => {},
         show: () => {},
         dispose: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+        debug: () => {},
+        trace: () => {},
     }),
 };
 

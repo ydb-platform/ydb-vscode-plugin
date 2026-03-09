@@ -61,19 +61,11 @@ export function showConnectionForm(connectionManager: ConnectionManager, editPro
             case 'testConnection': {
                 const profile: Omit<ConnectionProfile, 'id'> = message.profile;
                 try {
-                    const ok = await connectionManager.testConnection(profile);
-                    panel.webview.postMessage({
-                        type: 'testResult',
-                        success: ok,
-                        error: ok ? undefined : 'Connection failed',
-                    });
+                    await connectionManager.testConnection(profile);
+                    panel.webview.postMessage({ type: 'testResult', success: true });
                 } catch (err: unknown) {
                     const errorMsg = err instanceof Error ? err.message : String(err);
-                    panel.webview.postMessage({
-                        type: 'testResult',
-                        success: false,
-                        error: errorMsg,
-                    });
+                    panel.webview.postMessage({ type: 'testResult', success: false, error: errorMsg });
                 }
                 break;
             }

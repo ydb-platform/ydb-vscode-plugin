@@ -8,6 +8,7 @@ import { QueryService } from './queryService';
 import { SchemeService } from './schemeService';
 import { SchemeEntryType } from '../models/types';
 import { RagService, queryYdbVersion } from './ragService';
+import { getEffectiveEndpoint } from '../models/connectionProfile';
 import type { Driver } from '@ydbjs/core';
 
 /**
@@ -84,6 +85,83 @@ export class McpService implements vscode.Disposable {
                             null,
                             2,
                         ),
+                    }],
+                };
+            },
+        );
+
+        // Tool: ydb_connection_params — returns raw connection params + CLI command
+        server.tool(
+            'ydb_connection_params',
+            'Returns raw connection parameters for a YDB connection and a ready-to-use ydb CLI command string. ' +
+            'Use this to build scripts or connection strings for external tools (JDBC, Spark, SDK, etc.).',
+            { connection: connectionParam },
+            async ({ connection }) => {
+                const profiles = this.connectionManager.getProfiles();
+                const profile = profiles.find(p => p.name === connection);
+                if (!profile) {
+                    const available = profiles.map(p => `"${p.name}"`).join(', ');
+                    const hint = available ? `Available connections: ${available}` : 'No connections configured yet.';
+                    return { content: [{ type: 'text' as const, text: `Connection "${connection}" not found. ${hint}` }] };
+                }
+
+                const hostPort = getEffectiveEndpoint(profile);
+                const scheme = profile.secure ? 'grpcs' : 'grpc';
+                const endpoint = `${scheme}://${hostPort}`;
+
+                const raw: Record<string, unknown> = {
+                    endpoint,
+                    database: profile.database,
+                    authType: profile.authType,
+                    secure: profile.secure,
+                };
+                if (profile.tlsCaCertFile) {
+                    raw.tlsCaCertFile = profile.tlsCaCertFile;
+                }
+                if (profile.authType === 'serviceAccount' && profile.serviceAccountKeyFile) {
+                    raw.serviceAccountKeyFile = profile.serviceAccountKeyFile;
+                }
+                if (profile.authType === 'static' && profile.username) {
+                    raw.username = profile.username;
+                    // password is a secret — not included
+                }
+                if (profile.authType === 'token') {
+                    raw.tokenNote = 'Token is a secret — pass via $YDB_TOKEN env var or --iam-token-file <file>';
+                }
+
+                // Build ydb CLI auth flags
+                let cliAuthFlags: string;
+                switch (profile.authType) {
+                    case 'anonymous':
+                        cliAuthFlags = '';
+                        break;
+                    case 'static':
+                        cliAuthFlags = `--user ${profile.username ?? '<username>'} --password-file <path-to-password-file>`;
+                        break;
+                    case 'token':
+                        cliAuthFlags = '--iam-token-file <path-to-token-file>';
+                        break;
+                    case 'serviceAccount':
+                        cliAuthFlags = profile.serviceAccountKeyFile
+                            ? `--sa-key-file ${profile.serviceAccountKeyFile}`
+                            : '--sa-key-file <path-to-sa-key.json>';
+                        break;
+                    case 'metadata':
+                        cliAuthFlags = '--use-metadata-credentials';
+                        break;
+                    default:
+                        cliAuthFlags = '';
+                }
+
+                const cliParts = ['ydb', `-e ${endpoint}`, `-d ${profile.database}`];
+                if (cliAuthFlags) { cliParts.push(cliAuthFlags); }
+                cliParts.push('yql -s "<YOUR QUERY HERE>"');
+                const ydbCli = cliParts.join(' \\\n  ');
+
+                return {
+                    content: [{
+                        type: 'text' as const,
+                        text: JSON.stringify({ raw, ydbCli }, null, 2),
                     }],
                 };
             },

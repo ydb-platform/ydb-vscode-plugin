@@ -264,6 +264,10 @@ export async function insertTextIntoWorkspace(connectionManager: ConnectionManag
 export async function makeQueryInWorkspace(connectionManager: ConnectionManager, tablePath: string, rawQuery?: boolean): Promise<void> {
     const query = rawQuery ? tablePath : `select * from \`${tablePath}\` `;
     let pair = getLastActivePair();
+    const focusedId = connectionManager.getFocusedProfileId();
+    if (pair && pair.boundConnectionProfileId !== focusedId) {
+        pair = undefined;
+    }
     if (!pair) {
         pair = await createUnifiedWorkspace(connectionManager, query);
         sendToPair(pair, { type: 'triggerExecute' });
@@ -525,14 +529,16 @@ async function handleExecuteWithStats(pair: WorkspacePair, query: string): Promi
         pair.cachedColumns = result.columns;
 
         let svgContent: string | undefined;
-        const profile = pair.connectionManager.getActiveProfile();
+        const profile = pair.connectionManager.getProfileById(pair.boundConnectionProfileId ?? '');
         if (stats.planJson && profile) {
             const monUrl = getMonitoringUrl(profile);
             if (monUrl) {
                 try {
                     const authToken = extractAuthToken(profile);
-                    svgContent = await fetchPlanSvg(monUrl, stats.planJson, authToken);
-                } catch { /* ignore */ }
+                    svgContent = await fetchPlanSvg(monUrl, stats.planJson, profile.database, authToken);
+                } catch (e) {
+                    console.error('[YDB] fetchPlanSvg failed:', e instanceof Error ? e.message : e);
+                }
             }
         }
 

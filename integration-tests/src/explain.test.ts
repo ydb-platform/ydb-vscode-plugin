@@ -1,0 +1,36 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { executeQuery, getQueryService, closeDriver } from './setup.js';
+
+describe('YDB Explain', () => {
+    beforeAll(async () => {
+        await executeQuery(`
+            CREATE TABLE it_explain_table (
+                id Int32 NOT NULL,
+                value Utf8,
+                PRIMARY KEY (id)
+            )
+        `);
+    });
+
+    afterAll(async () => {
+        try { await executeQuery('DROP TABLE it_explain_table'); } catch { /* ignored */ }
+        await closeDriver();
+    });
+
+    it('should return a query plan', async () => {
+        const qs = await getQueryService();
+        const result = await qs.explainQuery('SELECT * FROM it_explain_table WHERE id = 1');
+
+        expect(result.plan).toBeDefined();
+        expect(result.plan.name).toBeTruthy();
+    });
+
+    it('should return raw plan JSON', async () => {
+        const qs = await getQueryService();
+        const result = await qs.explainQuery('SELECT * FROM it_explain_table');
+
+        expect(result.rawJson).toBeTruthy();
+        // Should be valid JSON
+        expect(() => JSON.parse(result.rawJson!)).not.toThrow();
+    });
+});
