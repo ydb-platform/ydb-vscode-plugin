@@ -77,6 +77,15 @@ function sendToPair(pair: WorkspacePair, msg: Record<string, unknown>): void {
     pair.panel.webview.postMessage(msg);
 }
 
+function updatePairTitle(pair: WorkspacePair): void {
+    const profile = pair.boundConnectionProfileId
+        ? pair.connectionManager.getProfileById(pair.boundConnectionProfileId)
+        : undefined;
+    if (profile) {
+        pair.panel.title = profile.name;
+    }
+}
+
 function pairCancelQuery(pair: WorkspacePair): void {
     if (pair.cancellation) {
         pair.cancellation.cancel();
@@ -239,6 +248,7 @@ export function registerWorkspaceListeners(context: vscode.ExtensionContext, con
 
                 workspacePairs.set(pairKey, pair);
                 _lastActivePairKey = pairKey;
+                updatePairTitle(pair);
 
                 panel.webview.html = buildWorkspaceHtml(panel.webview, _extensionUri, queryText, pairKey);
 
@@ -365,6 +375,11 @@ function setupMessageHandlers(panel: vscode.WebviewPanel, pair: WorkspacePair, p
                 }
                 break;
             }
+            case 'pasteRequest': {
+                const text = await vscode.env.clipboard.readText();
+                sendToPair(pair, { type: 'pasteResponse', text });
+                break;
+            }
         }
     });
 
@@ -413,6 +428,7 @@ async function createUnifiedWorkspace(connectionManager: ConnectionManager, init
 
     workspacePairs.set(pairKey, pair);
     _lastActivePairKey = pairKey;
+    updatePairTitle(pair);
 
     panel.webview.html = buildWorkspaceHtml(panel.webview, _extensionUri, initialContent, pairKey);
 
@@ -1395,6 +1411,13 @@ window.addEventListener('message', function(event) {
                 if (pos) window.monacoEditor.executeEdits('insert', [{ range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column), text: msg.text || '' }]);
             }
             break;
+        case 'pasteResponse':
+            if (window.monacoEditor && typeof msg.text === 'string') {
+                var sel = window.monacoEditor.getSelection();
+                window.monacoEditor.executeEdits('paste', [{ range: sel, text: msg.text, forceMoveMarkers: true }]);
+                window.monacoEditor.focus();
+            }
+            break;
         case 'clearState': clearErrors(); clearResults(); break;
         case 'cancelled': globalLoading.style.display = 'none'; clearResults(); break;
         case 'error': onError(msg); break;
@@ -2108,6 +2131,16 @@ require(['vs/editor/editor.main'], function() {
     });
 
     window.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function() { executeQuery(); });
+
+    // Paste workaround: VS Code webview blocks navigator.clipboard.readText(), so we ask the extension host
+    window.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, function() {
+        vscode.postMessage({ type: 'pasteRequest' });
+    });
+    window.monacoEditor.addAction({
+        id: 'editor.action.clipboardPasteAction',
+        label: 'Paste',
+        run: function() { vscode.postMessage({ type: 'pasteRequest' }); },
+    });
 
     if (pendingContent !== null) { window.monacoEditor.setValue(pendingContent); pendingContent = null; }
     if (pendingTriggerExecute) { pendingTriggerExecute = false; executeQuery(); }
