@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { executeQuery, getQueryService, closeDriver } from './setup.js';
 
 describe('YDB Resource Pool', () => {
-    beforeAll(async () => {
+    afterAll(async () => {
+        try { await executeQuery('DROP RESOURCE POOL it_test_pool'); } catch { /* ignored */ }
+        await closeDriver();
+    });
+
+    it('should appear in .sys/resource_pools with correct properties', async () => {
         await executeQuery(`
             CREATE RESOURCE POOL it_test_pool WITH (
                 CONCURRENT_QUERY_LIMIT=5,
@@ -10,14 +15,7 @@ describe('YDB Resource Pool', () => {
                 DATABASE_LOAD_CPU_THRESHOLD=80
             )
         `);
-    });
 
-    afterAll(async () => {
-        try { await executeQuery('DROP RESOURCE POOL it_test_pool'); } catch { /* ignored */ }
-        await closeDriver();
-    });
-
-    it('should appear in .sys/resource_pools with correct properties', async () => {
         const qs = await getQueryService();
         const pool = await qs.loadResourcePoolByName('it_test_pool');
 

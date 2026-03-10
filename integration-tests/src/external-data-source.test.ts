@@ -1,11 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { executeQuery, getQueryService, getDatabase, ensureS3Bucket, closeDriver } from './setup.js';
 
 describe('YDB External Data Source', () => {
-    let s3Location: string;
+    afterAll(async () => {
+        try { await executeQuery('DROP EXTERNAL DATA SOURCE it_test_ds'); } catch { /* ignored */ }
+        await closeDriver();
+    });
 
-    beforeAll(async () => {
-        s3Location = await ensureS3Bucket();
+    it('should be describable via describeExternalDataSource', async () => {
+        const s3Location = await ensureS3Bucket();
         await executeQuery(`
             CREATE EXTERNAL DATA SOURCE it_test_ds WITH (
                 SOURCE_TYPE="ObjectStorage",
@@ -13,14 +16,7 @@ describe('YDB External Data Source', () => {
                 AUTH_METHOD="NONE"
             )
         `);
-    });
 
-    afterAll(async () => {
-        try { await executeQuery('DROP EXTERNAL DATA SOURCE it_test_ds'); } catch { /* ignored */ }
-        await closeDriver();
-    });
-
-    it('should be describable via describeExternalDataSource', async () => {
         const qs = await getQueryService();
         const info = await qs.describeExternalDataSource(`${getDatabase()}/it_test_ds`);
 

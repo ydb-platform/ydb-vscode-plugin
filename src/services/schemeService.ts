@@ -8,6 +8,30 @@ import { SchemeEntry, SchemeEntryType, PermissionEntry } from '../models/types';
 export class SchemeService {
     constructor(private driver: Driver) {}
 
+    async makeDirectory(path: string): Promise<void> {
+        const scheme = this.driver.createClient(SchemeServiceDefinition);
+        const fullPath = path.startsWith('/') ? path : `${this.driver.database}/${path}`.replace(/\/+$/, '');
+        const response = await scheme.makeDirectory({ path: fullPath });
+
+        const op = response.operation;
+        if (!op || (op.status !== StatusIds_StatusCode.SUCCESS && op.status !== StatusIds_StatusCode.STATUS_CODE_UNSPECIFIED)) {
+            const issues = (op?.issues ?? []).map((i: { message?: string }) => i.message).join('; ');
+            throw new Error(`MakeDirectory failed: ${issues || 'unknown error'}`);
+        }
+    }
+
+    async removeDirectory(path: string): Promise<void> {
+        const scheme = this.driver.createClient(SchemeServiceDefinition);
+        const fullPath = path.startsWith('/') ? path : `${this.driver.database}/${path}`.replace(/\/+$/, '');
+        const response = await scheme.removeDirectory({ path: fullPath });
+
+        const op = response.operation;
+        if (!op || (op.status !== StatusIds_StatusCode.SUCCESS && op.status !== StatusIds_StatusCode.STATUS_CODE_UNSPECIFIED)) {
+            const issues = (op?.issues ?? []).map((i: { message?: string }) => i.message).join('; ');
+            throw new Error(`RemoveDirectory failed: ${issues || 'unknown error'}`);
+        }
+    }
+
     async listDirectory(path: string): Promise<SchemeEntry[]> {
         const scheme = this.driver.createClient(SchemeServiceDefinition);
         const fullPath = path.startsWith('/') ? path : `${this.driver.database}/${path}`.replace(/\/+$/, '');
