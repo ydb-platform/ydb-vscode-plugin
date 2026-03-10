@@ -227,6 +227,7 @@ describe('McpService', () => {
         it('returns table schema on success with absolute path', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
             vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
+            vi.spyOn(SchemeService.prototype, 'describePath').mockResolvedValue({ name: 'my_table', type: 2, self: false } as never);
             vi.spyOn(QueryService.prototype, 'describeTable').mockResolvedValue({
                 columns: [{ name: 'id', type: 'Int32', notNull: true }, { name: 'val', type: 'Utf8', notNull: false }],
                 primaryKeys: ['id'],
@@ -243,6 +244,7 @@ describe('McpService', () => {
         it('resolves relative path by prepending the database root', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
             vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
+            vi.spyOn(SchemeService.prototype, 'describePath').mockResolvedValue({ name: 'my_table', type: 2, self: false } as never);
             const spy = vi.spyOn(QueryService.prototype, 'describeTable').mockResolvedValue({
                 columns: [{ name: 'id', type: 'Int32', notNull: true }],
                 primaryKeys: ['id'],
@@ -251,12 +253,13 @@ describe('McpService', () => {
             });
 
             await invokeTool(manager, 'ydb_describe_table', { connection: 'dev', path: 'my_table' });
-            expect(spy).toHaveBeenCalledWith('/dev/my_table');
+            expect(spy).toHaveBeenCalledWith('/dev/my_table', false);
         });
 
         it('resolves relative path with subdirectory', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
             vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
+            vi.spyOn(SchemeService.prototype, 'describePath').mockResolvedValue({ name: 'my_table', type: 2, self: false } as never);
             const spy = vi.spyOn(QueryService.prototype, 'describeTable').mockResolvedValue({
                 columns: [],
                 primaryKeys: [],
@@ -265,12 +268,13 @@ describe('McpService', () => {
             });
 
             await invokeTool(manager, 'ydb_describe_table', { connection: 'dev', path: 'subdir/my_table' });
-            expect(spy).toHaveBeenCalledWith('/dev/subdir/my_table');
+            expect(spy).toHaveBeenCalledWith('/dev/subdir/my_table', false);
         });
 
         it('does not double-prepend when absolute path matches database', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
             vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
+            vi.spyOn(SchemeService.prototype, 'describePath').mockResolvedValue({ name: 'my_table', type: 2, self: false } as never);
             const spy = vi.spyOn(QueryService.prototype, 'describeTable').mockResolvedValue({
                 columns: [],
                 primaryKeys: [],
@@ -279,7 +283,7 @@ describe('McpService', () => {
             });
 
             await invokeTool(manager, 'ydb_describe_table', { connection: 'dev', path: '/dev/my_table' });
-            expect(spy).toHaveBeenCalledWith('/dev/my_table');
+            expect(spy).toHaveBeenCalledWith('/dev/my_table', false);
         });
     });
 

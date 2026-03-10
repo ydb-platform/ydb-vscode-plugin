@@ -9,6 +9,9 @@ import { Driver } from '@ydbjs/core';
 import { AnonymousCredentialsProvider } from '@ydbjs/auth/anonymous';
 import { QueryService } from '../../src/services/queryService.js';
 import { SchemeService } from '../../src/services/schemeService.js';
+import { ConnectionManager } from '../../src/services/connectionManager.js';
+import { McpService } from '../../src/services/mcpServer.js';
+import { MockMemento } from '../../src/test/helpers/mockMemento.js';
 
 const YDB_ENDPOINT = process.env.YDB_ENDPOINT ?? 'grpc://localhost:2136';
 const YDB_DATABASE = process.env.YDB_DATABASE ?? '/local';
@@ -68,6 +71,50 @@ export async function closeDriver(): Promise<void> {
     if (driver) {
         driver.close();
     }
+}
+
+// ---------------------------------------------------------------------------
+// MCP helpers
+// ---------------------------------------------------------------------------
+
+export const MCP_CONNECTION_NAME = 'integration-test';
+
+let mcpManager: ConnectionManager | undefined;
+
+async function getMcpManager(): Promise<ConnectionManager> {
+    if (!mcpManager) {
+        mcpManager = ConnectionManager.getInstance();
+        mcpManager.initialize(new MockMemento());
+        await mcpManager.addProfile({
+            name: MCP_CONNECTION_NAME,
+            // ConnectionManager.buildConnectionString prepends grpc:// based on secure flag,
+            // so strip the scheme from the endpoint env var.
+            endpoint: YDB_ENDPOINT.replace(/^grpcs?:\/\//, ''),
+            database: YDB_DATABASE,
+            authType: 'anonymous',
+            secure: YDB_ENDPOINT.startsWith('grpcs://'),
+        });
+    }
+    return mcpManager;
+}
+
+type ToolRecord = Record<string, {
+    handler: (args: unknown) => Promise<{ content: Array<{ type: string; text?: string }> }>;
+}>;
+
+export async function invokeMcpTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+    const manager = await getMcpManager();
+    const mcpService = new McpService(manager);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mcpServer = (mcpService as any).createMcpServer();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tools = (mcpServer as any)._registeredTools as ToolRecord;
+    const tool = tools[toolName];
+    if (!tool) {
+        throw new Error(`Tool "${toolName}" not registered. Available: ${Object.keys(tools).join(', ')}`);
+    }
+    const result = await tool.handler(args);
+    return result.content[0]?.text ?? '';
 }
 
 /**

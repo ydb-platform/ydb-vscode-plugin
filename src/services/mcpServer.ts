@@ -235,8 +235,12 @@ export class McpService implements vscode.Disposable {
                     const profile = this.getProfileByName(connection);
                     const driver = await this.connectionManager.getDriver(profile.id);
                     const resolvedPath = McpService.resolveTablePath(profile.database, path);
+                    const schemeService = new SchemeService(driver);
+                    const entry = await schemeService.describePath(resolvedPath);
+                    const isColumnTable = entry.type === SchemeEntryType.COLUMN_TABLE
+                        || entry.type === SchemeEntryType.COLUMN_STORE;
                     const queryService = new QueryService(driver);
-                    const desc = await queryService.describeTable(resolvedPath);
+                    const desc = await queryService.describeTable(resolvedPath, isColumnTable);
                     return {
                         content: [{
                             type: 'text' as const,
