@@ -330,6 +330,11 @@ export class DetailsProvider implements vscode.TreeDataProvider<DetailItem> {
                 dsPathItem.iconPath = new vscode.ThemeIcon('plug');
                 dsPathItem.contextValue = 'detail-datasource-link';
                 dsPathItem.dataSourcePath = desc.dataSourcePath;
+                dsPathItem.command = {
+                    command: 'ydb.goToDataSource',
+                    title: 'Go to Reference',
+                    arguments: [{ dataSourcePath: desc.dataSourcePath }],
+                };
                 items.push(dsPathItem);
             }
 
