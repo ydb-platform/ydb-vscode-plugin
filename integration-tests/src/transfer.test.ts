@@ -1,8 +1,15 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { executeQuery, getQueryService, getDatabase, closeDriver } from './setup.js';
 
 describe('YDB Transfer', () => {
-    beforeAll(async () => {
+    afterAll(async () => {
+        try { await executeQuery('DROP TRANSFER it_test_transfer'); } catch { /* ignored */ }
+        try { await executeQuery('DROP TOPIC it_transfer_src'); } catch { /* ignored */ }
+        try { await executeQuery('DROP TABLE it_transfer_dst'); } catch { /* ignored */ }
+        await closeDriver();
+    });
+
+    it('should be describable via describeTransfer', async () => {
         await executeQuery(`
             CREATE TABLE it_transfer_dst (
                 partition Uint32 NOT NULL,
@@ -21,16 +28,7 @@ describe('YDB Transfer', () => {
                 message: CAST($msg._data AS Utf8)
             |>]; }
         `);
-    });
 
-    afterAll(async () => {
-        try { await executeQuery('DROP TRANSFER it_test_transfer'); } catch { /* ignored */ }
-        try { await executeQuery('DROP TOPIC it_transfer_src'); } catch { /* ignored */ }
-        try { await executeQuery('DROP TABLE it_transfer_dst'); } catch { /* ignored */ }
-        await closeDriver();
-    });
-
-    it('should be describable via describeTransfer', async () => {
         const qs = await getQueryService();
         const info = await qs.describeTransfer(`${getDatabase()}/it_test_transfer`);
 

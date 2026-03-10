@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { executeQuery, closeDriver } from './setup.js';
 
 describe('YDB Data Types', () => {
-    beforeAll(async () => {
+    afterAll(async () => {
+        try { await executeQuery('DROP TABLE data_types_test'); } catch { /* ignored */ }
+        await closeDriver();
+    });
+
+    it('should round-trip basic data types', async () => {
         await executeQuery(`
             CREATE TABLE data_types_test (
                 id Int32 NOT NULL,
@@ -14,14 +19,7 @@ describe('YDB Data Types', () => {
                 PRIMARY KEY (id)
             )
         `);
-    });
 
-    afterAll(async () => {
-        try { await executeQuery('DROP TABLE data_types_test'); } catch { /* ignored */ }
-        await closeDriver();
-    });
-
-    it('should round-trip basic data types', async () => {
         await executeQuery(`
             INSERT INTO data_types_test (id, int_val, text_val, bool_val, double_val, ts_val)
             VALUES (42, 12345, 'Hello, YDB!', true, 3.14159, Timestamp('2024-01-15T10:30:00.000000Z'))
@@ -39,10 +37,8 @@ describe('YDB Data Types', () => {
         expect(row['text_val']).toBe('Hello, YDB!');
         expect(row['bool_val']).toBe(true);
         expect(row['double_val']).toBeCloseTo(3.14159, 5);
-        // Timestamp comes back as string or number — just verify it's present
         expect(row['ts_val']).toBeDefined();
 
-        // Cleanup
         await executeQuery('DELETE FROM data_types_test WHERE id = 42');
     });
 });

@@ -1,23 +1,25 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { executeQuery, getQueryService, closeDriver } from './setup.js';
 
 describe('YDB Explain', () => {
-    beforeAll(async () => {
+    afterAll(async () => {
+        try { await executeQuery('DROP TABLE it_explain_table'); } catch { /* ignored */ }
+        await closeDriver();
+    });
+
+    async function createTable() {
         await executeQuery(`
             CREATE TABLE it_explain_table (
                 id Int32 NOT NULL,
                 value Utf8,
                 PRIMARY KEY (id)
             )
-        `);
-    });
-
-    afterAll(async () => {
-        try { await executeQuery('DROP TABLE it_explain_table'); } catch { /* ignored */ }
-        await closeDriver();
-    });
+        `).catch(() => {});
+    }
 
     it('should return a query plan', async () => {
+        await createTable();
+
         const qs = await getQueryService();
         const result = await qs.explainQuery('SELECT * FROM it_explain_table WHERE id = 1');
 
@@ -26,11 +28,12 @@ describe('YDB Explain', () => {
     });
 
     it('should return raw plan JSON', async () => {
+        await createTable();
+
         const qs = await getQueryService();
         const result = await qs.explainQuery('SELECT * FROM it_explain_table');
 
         expect(result.rawJson).toBeTruthy();
-        // Should be valid JSON
         expect(() => JSON.parse(result.rawJson!)).not.toThrow();
     });
 });

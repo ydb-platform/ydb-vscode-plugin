@@ -1,40 +1,40 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { executeQuery, closeDriver, invokeMcpTool, MCP_CONNECTION_NAME } from './setup.js';
 
 const COL_TABLE = 'it_mcp_col_table';
 const COL_TABLE_PART = 'it_mcp_col_table_part';
 const ROW_TABLE = 'it_mcp_row_table';
 
-describe('MCP ydb_describe_table', () => {
-    beforeAll(async () => {
-        await executeQuery(`
-            CREATE TABLE ${COL_TABLE} (
-                id Int64 NOT NULL,
-                name Utf8,
-                score Double,
-                PRIMARY KEY (id)
-            ) WITH (STORE = COLUMN)
-        `);
-        await executeQuery(`
-            CREATE TABLE ${COL_TABLE_PART} (
-                id Int64 NOT NULL,
-                name Utf8,
-                score Double,
-                PRIMARY KEY (id)
-            )
-            PARTITION BY HASH(id)
-            WITH (STORE = COLUMN)
-        `);
-        await executeQuery(`
-            CREATE TABLE ${ROW_TABLE} (
-                id Int32 NOT NULL,
-                name Utf8,
-                val Int64,
-                PRIMARY KEY (id)
-            )
-        `);
-    });
+async function createMcpTables() {
+    await executeQuery(`
+        CREATE TABLE ${COL_TABLE} (
+            id Int64 NOT NULL,
+            name Utf8,
+            score Double,
+            PRIMARY KEY (id)
+        ) WITH (STORE = COLUMN)
+    `).catch(() => {});
+    await executeQuery(`
+        CREATE TABLE ${COL_TABLE_PART} (
+            id Int64 NOT NULL,
+            name Utf8,
+            score Double,
+            PRIMARY KEY (id)
+        )
+        PARTITION BY HASH(id)
+        WITH (STORE = COLUMN)
+    `).catch(() => {});
+    await executeQuery(`
+        CREATE TABLE ${ROW_TABLE} (
+            id Int32 NOT NULL,
+            name Utf8,
+            val Int64,
+            PRIMARY KEY (id)
+        )
+    `).catch(() => {});
+}
 
+describe('MCP ydb_describe_table', () => {
     afterAll(async () => {
         try { await executeQuery(`DROP TABLE ${COL_TABLE}`); } catch { /* ignored */ }
         try { await executeQuery(`DROP TABLE ${COL_TABLE_PART}`); } catch { /* ignored */ }
@@ -46,6 +46,7 @@ describe('MCP ydb_describe_table', () => {
 
     describe('column table', () => {
         it('isColumnTable=true', async () => {
+            await createMcpTables();
             const result = await invokeMcpTool('ydb_describe_table', {
                 connection: MCP_CONNECTION_NAME,
                 path: COL_TABLE,
@@ -55,6 +56,7 @@ describe('MCP ydb_describe_table', () => {
         });
 
         it('returns correct columns', async () => {
+            await createMcpTables();
             const result = await invokeMcpTool('ydb_describe_table', {
                 connection: MCP_CONNECTION_NAME,
                 path: COL_TABLE,
@@ -67,6 +69,7 @@ describe('MCP ydb_describe_table', () => {
         });
 
         it('returns correct primary key', async () => {
+            await createMcpTables();
             const result = await invokeMcpTool('ydb_describe_table', {
                 connection: MCP_CONNECTION_NAME,
                 path: COL_TABLE,
@@ -76,12 +79,12 @@ describe('MCP ydb_describe_table', () => {
         });
 
         it('partitionBy defaults to primary key for column tables', async () => {
+            await createMcpTables();
             const result = await invokeMcpTool('ydb_describe_table', {
                 connection: MCP_CONNECTION_NAME,
                 path: COL_TABLE,
             });
             const parsed = JSON.parse(result);
-            // YDB column tables default partitionBy to the primary key columns
             expect(parsed.partitionBy).toEqual(['id']);
         });
     });
@@ -90,6 +93,7 @@ describe('MCP ydb_describe_table', () => {
 
     describe('column table with PARTITION_BY', () => {
         it('isColumnTable=true', async () => {
+            await createMcpTables();
             const result = await invokeMcpTool('ydb_describe_table', {
                 connection: MCP_CONNECTION_NAME,
                 path: COL_TABLE_PART,
@@ -99,6 +103,7 @@ describe('MCP ydb_describe_table', () => {
         });
 
         it('partitionBy contains the declared column', async () => {
+            await createMcpTables();
             const result = await invokeMcpTool('ydb_describe_table', {
                 connection: MCP_CONNECTION_NAME,
                 path: COL_TABLE_PART,
@@ -112,6 +117,7 @@ describe('MCP ydb_describe_table', () => {
 
     describe('row table', () => {
         it('isColumnTable=false', async () => {
+            await createMcpTables();
             const result = await invokeMcpTool('ydb_describe_table', {
                 connection: MCP_CONNECTION_NAME,
                 path: ROW_TABLE,
@@ -121,6 +127,7 @@ describe('MCP ydb_describe_table', () => {
         });
 
         it('returns correct columns', async () => {
+            await createMcpTables();
             const result = await invokeMcpTool('ydb_describe_table', {
                 connection: MCP_CONNECTION_NAME,
                 path: ROW_TABLE,
@@ -133,6 +140,7 @@ describe('MCP ydb_describe_table', () => {
         });
 
         it('returns correct primary key', async () => {
+            await createMcpTables();
             const result = await invokeMcpTool('ydb_describe_table', {
                 connection: MCP_CONNECTION_NAME,
                 path: ROW_TABLE,
@@ -142,6 +150,7 @@ describe('MCP ydb_describe_table', () => {
         });
 
         it('partitionBy is empty for a basic row table', async () => {
+            await createMcpTables();
             const result = await invokeMcpTool('ydb_describe_table', {
                 connection: MCP_CONNECTION_NAME,
                 path: ROW_TABLE,

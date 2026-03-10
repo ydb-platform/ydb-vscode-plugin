@@ -88,8 +88,20 @@ done
 # is given — in that case it copies the provided file instead of generating.
 # We patch the generated config on the host, save it to a separate path,
 # then re-run the container pointing --config-path at that file (mounted via -v).
-log "Patching config: enabling feature flags and replication gRPC service ..."
 GENERATED_CONFIG="${YDB_DATA_DIR}/cluster/kikimr_configs/config.yaml"
+log "Waiting for generated config file ..."
+for i in $(seq 1 "${WAIT_TIMEOUT}"); do
+    if [ -f "${GENERATED_CONFIG}" ]; then
+        log "Config file found after ${i}s"
+        break
+    fi
+    if [ "${i}" -eq "${WAIT_TIMEOUT}" ]; then
+        die "Config file did not appear within ${WAIT_TIMEOUT}s"
+    fi
+    sleep 1
+done
+
+log "Patching config: enabling feature flags and replication gRPC service ..."
 PATCHED_CONFIG="/tmp/ydb-it-patched-config.yaml"
 cp "${GENERATED_CONFIG}" "${PATCHED_CONFIG}"
 

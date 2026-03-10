@@ -1,8 +1,16 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { executeQuery, getQueryService, getDatabase, closeDriver } from './setup.js';
 
 describe('YDB Streaming Query', () => {
-    beforeAll(async () => {
+    afterAll(async () => {
+        try { await executeQuery('DROP STREAMING QUERY it_sq'); } catch { /* ignored */ }
+        try { await executeQuery('DROP EXTERNAL DATA SOURCE it_sq_eds'); } catch { /* ignored */ }
+        try { await executeQuery('DROP TOPIC it_sq_src'); } catch { /* ignored */ }
+        try { await executeQuery('DROP TOPIC it_sq_dst'); } catch { /* ignored */ }
+        await closeDriver();
+    });
+
+    it('should appear in .sys/streaming_queries', async () => {
         await executeQuery('CREATE TOPIC it_sq_src');
         await executeQuery('CREATE TOPIC it_sq_dst');
         await executeQuery(`
@@ -18,17 +26,7 @@ describe('YDB Streaming Query', () => {
                 INSERT INTO it_sq_eds.it_sq_dst SELECT * FROM it_sq_eds.it_sq_src
             END DO
         `);
-    });
 
-    afterAll(async () => {
-        try { await executeQuery('DROP STREAMING QUERY it_sq'); } catch { /* ignored */ }
-        try { await executeQuery('DROP EXTERNAL DATA SOURCE it_sq_eds'); } catch { /* ignored */ }
-        try { await executeQuery('DROP TOPIC it_sq_src'); } catch { /* ignored */ }
-        try { await executeQuery('DROP TOPIC it_sq_dst'); } catch { /* ignored */ }
-        await closeDriver();
-    });
-
-    it('should appear in .sys/streaming_queries', async () => {
         const qs = await getQueryService();
         const queries = await qs.loadStreamingQueries(getDatabase());
 
