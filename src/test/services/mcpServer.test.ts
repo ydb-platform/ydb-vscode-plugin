@@ -7,6 +7,32 @@ import { MockMemento } from '../helpers/mockMemento';
 import { QueryService } from '../../services/queryService';
 import { SchemeService } from '../../services/schemeService';
 
+// ---------------------------------------------------------------------------
+// Unit tests for McpService static helpers (no HTTP, no mocks needed)
+// ---------------------------------------------------------------------------
+
+describe('McpService.resolveTablePath', () => {
+    it('returns absolute path unchanged', () => {
+        expect(McpService.resolveTablePath('/mydb', '/mydb/my_table')).toBe('/mydb/my_table');
+    });
+
+    it('prepends database to relative path', () => {
+        expect(McpService.resolveTablePath('/mydb', 'my_table')).toBe('/mydb/my_table');
+    });
+
+    it('handles relative path with subdirectory', () => {
+        expect(McpService.resolveTablePath('/mydb', 'subdir/my_table')).toBe('/mydb/subdir/my_table');
+    });
+
+    it('strips trailing slash from database before joining', () => {
+        expect(McpService.resolveTablePath('/mydb/', 'my_table')).toBe('/mydb/my_table');
+    });
+
+    it('returns root-based absolute path unchanged even when database differs', () => {
+        expect(McpService.resolveTablePath('/other', '/mydb/my_table')).toBe('/mydb/my_table');
+    });
+});
+
 // Helpers -----------------------------------------------------------------------
 
 function getRandomPort(): number {
@@ -198,7 +224,7 @@ describe('McpService', () => {
             expect(result).toContain('Error:');
         });
 
-        it('returns table schema on success', async () => {
+        it('returns table schema on success with absolute path', async () => {
             await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
             vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
             vi.spyOn(QueryService.prototype, 'describeTable').mockResolvedValue({
@@ -212,6 +238,48 @@ describe('McpService', () => {
             const parsed = JSON.parse(result);
             expect(parsed.primaryKeys).toEqual(['id']);
             expect(parsed.columns).toHaveLength(2);
+        });
+
+        it('resolves relative path by prepending the database root', async () => {
+            await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
+            const spy = vi.spyOn(QueryService.prototype, 'describeTable').mockResolvedValue({
+                columns: [{ name: 'id', type: 'Int32', notNull: true }],
+                primaryKeys: ['id'],
+                partitionBy: [],
+                isColumnTable: false,
+            });
+
+            await invokeTool(manager, 'ydb_describe_table', { connection: 'dev', path: 'my_table' });
+            expect(spy).toHaveBeenCalledWith('/dev/my_table');
+        });
+
+        it('resolves relative path with subdirectory', async () => {
+            await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
+            const spy = vi.spyOn(QueryService.prototype, 'describeTable').mockResolvedValue({
+                columns: [],
+                primaryKeys: [],
+                partitionBy: [],
+                isColumnTable: false,
+            });
+
+            await invokeTool(manager, 'ydb_describe_table', { connection: 'dev', path: 'subdir/my_table' });
+            expect(spy).toHaveBeenCalledWith('/dev/subdir/my_table');
+        });
+
+        it('does not double-prepend when absolute path matches database', async () => {
+            await manager.addProfile({ name: 'dev', endpoint: 'grpc://localhost:2135', database: '/dev', authType: 'anonymous', secure: false });
+            vi.spyOn(manager, 'getDriver').mockResolvedValue({ options: {}, isSecure: false } as never);
+            const spy = vi.spyOn(QueryService.prototype, 'describeTable').mockResolvedValue({
+                columns: [],
+                primaryKeys: [],
+                partitionBy: [],
+                isColumnTable: false,
+            });
+
+            await invokeTool(manager, 'ydb_describe_table', { connection: 'dev', path: '/dev/my_table' });
+            expect(spy).toHaveBeenCalledWith('/dev/my_table');
         });
     });
 

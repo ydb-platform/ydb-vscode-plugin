@@ -35,10 +35,10 @@ export class McpService implements vscode.Disposable {
     ) {}
 
     /**
-     * Looks up a connection profile by name and returns its Driver.
+     * Looks up a connection profile by name.
      * Throws with a descriptive message when the name is not found.
      */
-    private async getDriverByName(connectionName: string): Promise<Driver> {
+    private getProfileByName(connectionName: string): import('../models/connectionProfile').ConnectionProfile {
         const profiles = this.connectionManager.getProfiles();
         const profile = profiles.find(p => p.name === connectionName);
         if (!profile) {
@@ -46,7 +46,29 @@ export class McpService implements vscode.Disposable {
             const hint = available ? `Available connections: ${available}` : 'No connections configured yet.';
             throw new Error(`Connection "${connectionName}" not found. ${hint}`);
         }
+        return profile;
+    }
+
+    /**
+     * Looks up a connection profile by name and returns its Driver.
+     * Throws with a descriptive message when the name is not found.
+     */
+    private async getDriverByName(connectionName: string): Promise<Driver> {
+        const profile = this.getProfileByName(connectionName);
         return this.connectionManager.getDriver(profile.id);
+    }
+
+    /**
+     * Resolves a table path to an absolute path.
+     * If path already starts with '/', it is returned as-is.
+     * Otherwise, it is joined with the database root (e.g. 'my_table' → '/mydb/my_table').
+     */
+    static resolveTablePath(database: string, path: string): string {
+        if (path.startsWith('/')) {
+            return path;
+        }
+        const db = database.endsWith('/') ? database.slice(0, -1) : database;
+        return `${db}/${path}`;
     }
 
     /** Creates and registers all YDB tools on a new McpServer instance. */
@@ -204,13 +226,17 @@ export class McpService implements vscode.Disposable {
             'Describes a YDB table schema: columns with types and primary keys',
             {
                 connection: connectionParam,
-                path: z.string().describe('Full path to the table (e.g. /Root/mydb/my_table)'),
+                path: z.string().describe(
+                    'Path to the table. Absolute (e.g. /Root/mydb/my_table) or relative to the database root (e.g. my_table or subdir/my_table).',
+                ),
             },
             async ({ connection, path }) => {
                 try {
-                    const driver = await this.getDriverByName(connection);
+                    const profile = this.getProfileByName(connection);
+                    const driver = await this.connectionManager.getDriver(profile.id);
+                    const resolvedPath = McpService.resolveTablePath(profile.database, path);
                     const queryService = new QueryService(driver);
-                    const desc = await queryService.describeTable(path);
+                    const desc = await queryService.describeTable(resolvedPath);
                     return {
                         content: [{
                             type: 'text' as const,
