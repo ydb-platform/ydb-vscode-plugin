@@ -26,6 +26,7 @@ interface WorkspacePair {
     cancellation: vscode.CancellationTokenSource | undefined;
     cached: CachedState;
     boundConnectionProfileId?: string;
+    queryNumber: number;
 }
 
 export interface PersistedWorkspaceState {
@@ -36,6 +37,7 @@ export interface PersistedWorkspaceState {
     cachedColumns: ColumnInfo[];
     cached: CachedState;
     viewColumn?: number;
+    queryNumber?: number;
 }
 
 interface EditEntry {
@@ -81,9 +83,10 @@ function updatePairTitle(pair: WorkspacePair): void {
     const profile = pair.boundConnectionProfileId
         ? pair.connectionManager.getProfileById(pair.boundConnectionProfileId)
         : undefined;
-    if (profile) {
-        pair.panel.title = profile.name;
+    if (!profile) {
+        throw new Error(`No connection profile found for workspace Query ${pair.queryNumber}`);
     }
+    pair.panel.title = `"${profile.name}"."Query ${pair.queryNumber}"`;
 }
 
 function pairCancelQuery(pair: WorkspacePair): void {
@@ -162,6 +165,7 @@ export function saveAllWorkspaceStates(): void {
             cachedColumns: pair.cachedColumns,
             cached: truncateCachedState(pair.cached),
             viewColumn: pair.panel.viewColumn,
+            queryNumber: pair.queryNumber,
         });
     }
     _workspaceState.update(WORKSPACE_STATES_KEY, states);
@@ -236,6 +240,9 @@ export function registerWorkspaceListeners(context: vscode.ExtensionContext, con
                     localResourceRoots: [_extensionUri],
                 };
 
+                const restoredQueryNumber = persisted?.queryNumber
+                    ?? (parseInt(pairKey.replace('workspace-', ''), 10) || workspaceCounter);
+
                 const pair: WorkspacePair = {
                     panel,
                     connectionManager,
@@ -244,6 +251,7 @@ export function registerWorkspaceListeners(context: vscode.ExtensionContext, con
                     cancellation: undefined,
                     cached: persisted?.cached ?? {},
                     boundConnectionProfileId: boundProfileId,
+                    queryNumber: restoredQueryNumber,
                 };
 
                 workspacePairs.set(pairKey, pair);
@@ -424,6 +432,7 @@ async function createUnifiedWorkspace(connectionManager: ConnectionManager, init
         cancellation: undefined,
         cached: {},
         boundConnectionProfileId: connectionManager.getFocusedProfileId(),
+        queryNumber: workspaceCounter,
     };
 
     workspacePairs.set(pairKey, pair);

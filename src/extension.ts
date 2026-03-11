@@ -4,6 +4,7 @@ import { registerConnectionCommands } from './commands/connectionCommands';
 import { registerQueryCommands } from './commands/queryCommands';
 import { registerViewCommands } from './commands/viewCommands';
 import { registerCreateCommands } from './commands/createCommands';
+import { registerDeleteCommands } from './commands/deleteCommands';
 import { YdbNavigatorProvider } from './views/navigatorProvider';
 import { SessionProvider } from './views/sessionProvider';
 import { PermissionsProvider } from './views/permissionsProvider';
@@ -204,6 +205,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerQueryCommands(context, connectionManager, navigatorProvider);
     registerViewCommands(context, connectionManager, permissionsProvider);
     registerCreateCommands(context);
+    registerDeleteCommands(context, connectionManager, navigatorProvider);
 
     context.subscriptions.push(
         vscode.languages.registerCompletionItemProvider('yql', completionProvider),

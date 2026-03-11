@@ -267,6 +267,12 @@
         "icon": "$(trash)"
       },
       {
+        "command": "ydb.deleteObject",
+        "title": "Delete Object",
+        "category": "YDB",
+        "icon": "$(trash)"
+      },
+      {
         "command": "ydb.setFocusedConnection",
         "title": "Set as Focused",
         "category": "YDB",
@@ -570,6 +576,11 @@
           "command": "ydb.viewStreamingQuerySource",
           "when": "viewItem =~ /^streaming-query-(running|stopped)$/",
           "group": "navigation@2"
+        },
+        {
+          "command": "ydb.deleteObject",
+          "when": "view == ydbNavigator && viewItem =~ /^(folder|table|column-store|topic|view|external-table|external-datasource|resource-pool|transfer|coordination-node|streaming-query-running|streaming-query-stopped)$/",
+          "group": "3_delete@1"
         },
         {
           "command": "ydb.goToDataSource",
