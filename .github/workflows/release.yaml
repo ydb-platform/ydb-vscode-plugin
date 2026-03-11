@@ -34,8 +34,26 @@ jobs:
           name: vsix
           path: '*.vsix'
 
-  release:
+  integration-tests:
     needs: build
+    name: Integration tests (YDB + MinIO)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Run integration tests
+        run: bash integration-tests/run-tests.sh
+
+  release:
+    needs: integration-tests
     runs-on: ubuntu-latest
     permissions:
       contents: write
