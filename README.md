@@ -39,13 +39,6 @@ Or via the VS Code UI:
 4. Select **Install from VSIX...**
 5. Choose the downloaded `.vsix` file
 
-### From Yandex Cloud Storage
-
-```bash
-curl -O https://storage.yandexcloud.net/ydb-dbeaver/vscode/ydb-vscode-plugin-latest.vsix
-code --install-extension ydb-vscode-plugin-latest.vsix
-```
-
 After installation, reload VS Code to activate the extension.
 
 ## Getting Started
