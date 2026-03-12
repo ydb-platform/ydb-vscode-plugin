@@ -1,6 +1,6 @@
 import { SchemeService } from './schemeService.js';
 import { QueryService } from './queryService.js';
-import { SchemeEntryType } from '../models/types.js';
+import { SchemeEntry, SchemeEntryType } from '../models/types.js';
 
 export interface DeleteProgress {
     deleted: number;
@@ -46,7 +46,7 @@ export class DeleteService {
         const items: DeleteItem[] = [];
 
         if (type === SchemeEntryType.DIRECTORY) {
-            let children;
+            let children: SchemeEntry[];
             try {
                 children = await this.schemeService.listDirectory(path);
             } catch {
