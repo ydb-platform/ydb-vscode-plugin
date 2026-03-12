@@ -10,9 +10,12 @@ describe('YDB Resource Pool Classifier', () => {
 
     it('should appear in .sys/resource_pool_classifiers with correct properties', async () => {
         await executeQuery('CREATE RESOURCE POOL it_clf_pool WITH (CONCURRENT_QUERY_LIMIT=1)');
+        // MEMBER_NAME filter prevents this catch-all classifier from intercepting
+        // queries from other test files if cleanup fails.
         await executeQuery(`
             CREATE RESOURCE POOL CLASSIFIER it_test_classifier WITH (
                 RANK=1000,
+                MEMBER_NAME="it_test_member_nonexistent",
                 RESOURCE_POOL="it_clf_pool"
             )
         `);
