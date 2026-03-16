@@ -1254,15 +1254,125 @@ var btnCommit = document.getElementById('btnCommit');
 var btnDiscard = document.getElementById('btnDiscard');
 var btnCancelEdit = document.getElementById('btnCancelEdit');
 
-function isStringType(typeName) {
-    if (!typeName) return false;
-    var t = typeName.replace(/^Optional<(.+)>$/i, '$1').toLowerCase();
-    return t === 'string' || t === 'yson';
-}
-
 function decodeBase64(str) {
     try { return decodeURIComponent(Array.from(atob(str), function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); }
     catch (e) { return str; }
+}
+
+function splitTypeArgs(s) {
+    var depth = 0, parenDepth = 0, start = 0, parts = [];
+    for (var i = 0; i < s.length; i++) {
+        var ch = s[i];
+        if (ch === '<') depth++;
+        else if (ch === '>') depth--;
+        else if (ch === '(') parenDepth++;
+        else if (ch === ')') parenDepth--;
+        else if (ch === ',' && depth === 0 && parenDepth === 0) {
+            parts.push(s.substring(start, i).trim());
+            start = i + 1;
+        }
+    }
+    parts.push(s.substring(start).trim());
+    return parts;
+}
+
+function parseType(typeStr) {
+    typeStr = (typeStr || '').trim();
+    var idx = typeStr.indexOf('<');
+    if (idx === -1) { return { kind: 'primitive', name: typeStr.toUpperCase() }; }
+    var outer = typeStr.substring(0, idx).trim().toUpperCase();
+    var inner = typeStr.substring(idx + 1, typeStr.length - 1);
+    if (outer === 'OPTIONAL') { return { kind: 'optional', item: parseType(inner) }; }
+    if (outer === 'LIST') { return { kind: 'list', item: parseType(inner) }; }
+    if (outer === 'DICT') {
+        var p = splitTypeArgs(inner);
+        return { kind: 'dict', key: parseType(p[0]), value: parseType(p[1]) };
+    }
+    if (outer === 'TUPLE') {
+        return { kind: 'tuple', elements: splitTypeArgs(inner).map(parseType) };
+    }
+    if (outer === 'STRUCT') {
+        var members = splitTypeArgs(inner).map(function(part) {
+            var ci = part.indexOf(':');
+            return { name: part.substring(0, ci).trim(), type: parseType(part.substring(ci + 1).trim()) };
+        });
+        return { kind: 'struct', members: members };
+    }
+    return { kind: 'unknown' };
+}
+
+function isBase64Primitive(node) {
+    return node.kind === 'primitive' && (node.name === 'STRING' || node.name === 'YSON');
+}
+
+var DATE_PRIMITIVES = { DATE: 'date', DATE32: 'date', DATETIME: 'datetime', DATETIME64: 'datetime', TIMESTAMP: 'timestamp', TIMESTAMP64: 'timestamp' };
+
+function formatDatePrimitive(value, typeName) {
+    if (typeof value !== 'number') return null;
+    var kind = DATE_PRIMITIVES[typeName];
+    if (!kind) return null;
+    var ms;
+    if (kind === 'date') { ms = value * 86400000; }
+    else if (kind === 'datetime') { ms = value * 1000; }
+    else { ms = Math.floor(value / 1000); }
+    var d = new Date(ms);
+    if (isNaN(d.getTime())) return null;
+    if (kind === 'date') { return d.toISOString().substring(0, 10); }
+    return d.toISOString().replace('T', ' ').substring(0, 23);
+}
+
+function formatByType(value, node) {
+    if (value === null || value === undefined) return value;
+    switch (node.kind) {
+        case 'primitive': {
+            var fmt = formatDatePrimitive(value, node.name);
+            return fmt !== null ? fmt : value;
+        }
+        case 'optional': return formatByType(value, node.item);
+        case 'list': return Array.isArray(value) ? value.map(function(item) { return formatByType(item, node.item); }) : value;
+        case 'struct':
+            if (typeof value === 'object' && !Array.isArray(value)) {
+                var res = {};
+                node.members.forEach(function(m) { res[m.name] = formatByType(value[m.name], m.type); });
+                return res;
+            }
+            return value;
+        case 'tuple': return Array.isArray(value) ? value.map(function(item, i) { return formatByType(item, node.elements[i]); }) : value;
+        default: return value;
+    }
+}
+
+function decodeValueByType(value, node) {
+    if (value === null || value === undefined) return value;
+    switch (node.kind) {
+        case 'primitive':
+            return (isBase64Primitive(node) && typeof value === 'string') ? decodeBase64(value) : value;
+        case 'optional':
+            return decodeValueByType(value, node.item);
+        case 'list':
+            return Array.isArray(value) ? value.map(function(item) { return decodeValueByType(item, node.item); }) : value;
+        case 'dict':
+            if (typeof value === 'object' && !Array.isArray(value)) {
+                var result = {};
+                Object.keys(value).forEach(function(k) {
+                    var dk = isBase64Primitive(node.key) ? decodeBase64(k) : k;
+                    result[dk] = decodeValueByType(value[k], node.value);
+                });
+                return result;
+            }
+            return value;
+        case 'struct':
+            if (typeof value === 'object' && !Array.isArray(value)) {
+                var res = {};
+                node.members.forEach(function(m) { res[m.name] = decodeValueByType(value[m.name], m.type); });
+                return res;
+            }
+            return value;
+        case 'tuple':
+            return Array.isArray(value) ? value.map(function(item, i) { return decodeValueByType(item, node.elements[i]); }) : value;
+        default:
+            return value;
+    }
 }
 
 // Tabs
@@ -1506,8 +1616,10 @@ function renderRows(rows) {
         return '<tr>' + allColumns.map(function(c) {
             var val = row[c.name];
             if (val === null || val === undefined) return '<td><span class="null-val">NULL</span></td>';
-            var s = typeof val === 'object' ? JSON.stringify(val) : String(val);
-            if (shouldDecode && isStringType(c.type)) s = decodeBase64(s);
+            var typeNode = parseType(c.type);
+            var displayVal = shouldDecode ? decodeValueByType(val, typeNode) : val;
+            displayVal = formatByType(displayVal, typeNode);
+            var s = typeof displayVal === 'object' ? JSON.stringify(displayVal) : String(displayVal);
             var idx = cellFullValues.length; cellFullValues.push(s);
             return '<td data-cellidx="' + idx + '" title="' + esc(s) + '">' + esc(s) + '</td>';
         }).join('') + '</tr>';
@@ -2149,6 +2261,56 @@ require(['vs/editor/editor.main'], function() {
         id: 'editor.action.clipboardPasteAction',
         label: 'Paste',
         run: function() { vscode.postMessage({ type: 'pasteRequest' }); },
+    });
+
+    // Cut workaround: VS Code webview intercepts Ctrl+X before Monaco, so we handle it manually
+    function performCut() {
+        var sel = window.monacoEditor.getSelection();
+        var model = window.monacoEditor.getModel();
+        if (!model) { return; }
+        var text, range;
+        if (sel.isEmpty()) {
+            var line = sel.startLineNumber;
+            var lastLine = model.getLineCount();
+            text = model.getLineContent(line);
+            if (line < lastLine) {
+                text += '\n';
+                range = new monaco.Range(line, 1, line + 1, 1);
+            } else {
+                range = new monaco.Range(line, 1, line, model.getLineMaxColumn(line));
+            }
+        } else {
+            text = model.getValueInRange(sel);
+            range = sel;
+        }
+        navigator.clipboard.writeText(text);
+        window.monacoEditor.executeEdits('cut', [{ range: range, text: '' }]);
+    }
+    window.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, function() { performCut(); });
+    window.monacoEditor.addAction({
+        id: 'editor.action.clipboardCutAction',
+        label: 'Cut',
+        run: function() { performCut(); },
+    });
+
+    // Copy workaround: VS Code webview may intercept Ctrl+C; use explicit clipboard write
+    function performCopy() {
+        var sel = window.monacoEditor.getSelection();
+        var model = window.monacoEditor.getModel();
+        if (!model) { return; }
+        var text;
+        if (sel.isEmpty()) {
+            text = model.getLineContent(sel.startLineNumber);
+        } else {
+            text = model.getValueInRange(sel);
+        }
+        navigator.clipboard.writeText(text);
+    }
+    window.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, function() { performCopy(); });
+    window.monacoEditor.addAction({
+        id: 'editor.action.clipboardCopyAction',
+        label: 'Copy',
+        run: function() { performCopy(); },
     });
 
     if (pendingContent !== null) { window.monacoEditor.setValue(pendingContent); pendingContent = null; }

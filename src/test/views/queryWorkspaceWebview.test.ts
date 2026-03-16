@@ -343,3 +343,162 @@ describe('workspace state persistence keys', () => {
         expect(extSrc).toMatch(/saveAllWorkspaceStates\(\)/);
     });
 });
+
+describe('webview JS: formatDatePrimitive', () => {
+    const src = readFileSync(resolve(__dirname, '../../views/queryWorkspaceWebview.ts'), 'utf8');
+
+    // Extract DATE_PRIMITIVES + formatDatePrimitive from source and eval them
+    function getFormatDatePrimitive(): (value: unknown, typeName: string) => string | null {
+        const mapMatch = src.match(/var DATE_PRIMITIVES\s*=\s*\{[\s\S]*?\};/);
+        const fnMatch = src.match(/function formatDatePrimitive\(value,\s*typeName\)\s*\{[\s\S]*?\n\}/);
+        expect(mapMatch).not.toBeNull();
+        expect(fnMatch).not.toBeNull();
+        // eslint-disable-next-line no-new-func
+        const fn = new Function(`${mapMatch![0]}\n${fnMatch![0]}\nreturn formatDatePrimitive;`)();
+        return fn;
+    }
+
+    it('converts DATE days to ISO date string', () => {
+        const fmt = getFormatDatePrimitive();
+        // 20522 days since epoch = 2026-03-10
+        expect(fmt(20522, 'DATE')).toBe('2026-03-10');
+    });
+
+    it('converts DATE32 same as DATE', () => {
+        const fmt = getFormatDatePrimitive();
+        expect(fmt(20522, 'DATE32')).toBe('2026-03-10');
+    });
+
+    it('converts DATETIME seconds to ISO datetime string', () => {
+        const fmt = getFormatDatePrimitive();
+        // 20522 * 86400 = 1773100800 seconds since epoch
+        const result = fmt(20522 * 86400, 'DATETIME');
+        expect(result).toBe('2026-03-10 00:00:00.000');
+    });
+
+    it('converts TIMESTAMP microseconds to ISO datetime string', () => {
+        const fmt = getFormatDatePrimitive();
+        // 20522 * 86400 seconds * 1000000 microseconds
+        const result = fmt(20522 * 86400 * 1000000, 'TIMESTAMP');
+        expect(result).toBe('2026-03-10 00:00:00.000');
+    });
+
+    it('returns null for non-date primitive names', () => {
+        const fmt = getFormatDatePrimitive();
+        expect(fmt(42, 'INT32')).toBeNull();
+        expect(fmt(42, 'UTF8')).toBeNull();
+    });
+
+    it('returns null for non-numeric value', () => {
+        const fmt = getFormatDatePrimitive();
+        expect(fmt('2026-03-15', 'DATE')).toBeNull();
+    });
+
+    it('epoch 0 gives 1970-01-01 for DATE', () => {
+        const fmt = getFormatDatePrimitive();
+        expect(fmt(0, 'DATE')).toBe('1970-01-01');
+    });
+});
+
+describe('webview JS: formatByType date handling', () => {
+    const src = readFileSync(resolve(__dirname, '../../views/queryWorkspaceWebview.ts'), 'utf8');
+
+    function getFormatByType(): (value: unknown, node: unknown) => unknown {
+        const mapMatch = src.match(/var DATE_PRIMITIVES\s*=\s*\{[\s\S]*?\};/);
+        const fmtPrimMatch = src.match(/function formatDatePrimitive\(value,\s*typeName\)\s*\{[\s\S]*?\n\}/);
+        const fmtByTypeMatch = src.match(/function formatByType\(value,\s*node\)\s*\{[\s\S]*?\n\}/);
+        expect(mapMatch).not.toBeNull();
+        expect(fmtPrimMatch).not.toBeNull();
+        expect(fmtByTypeMatch).not.toBeNull();
+        // eslint-disable-next-line no-new-func
+        return new Function(
+            `${mapMatch![0]}\n${fmtPrimMatch![0]}\n${fmtByTypeMatch![0]}\nreturn formatByType;`
+        )();
+    }
+
+    it('formats DATE primitive', () => {
+        const fmt = getFormatByType();
+        expect(fmt(20522, { kind: 'primitive', name: 'DATE' })).toBe('2026-03-10');
+    });
+
+    it('formats Optional<DATE>', () => {
+        const fmt = getFormatByType();
+        expect(fmt(20522, { kind: 'optional', item: { kind: 'primitive', name: 'DATE' } })).toBe('2026-03-10');
+    });
+
+    it('passes non-date primitives through unchanged', () => {
+        const fmt = getFormatByType();
+        expect(fmt(42, { kind: 'primitive', name: 'INT32' })).toBe(42);
+    });
+
+    it('formats List<DATE>', () => {
+        const fmt = getFormatByType();
+        expect(fmt([20522, 0], { kind: 'list', item: { kind: 'primitive', name: 'DATE' } }))
+            .toEqual(['2026-03-10', '1970-01-01']);
+    });
+
+    it('handles null value', () => {
+        const fmt = getFormatByType();
+        expect(fmt(null, { kind: 'primitive', name: 'DATE' })).toBeNull();
+    });
+});
+
+describe('webview JS: performCopy', () => {
+    const src = readFileSync(resolve(__dirname, '../../views/queryWorkspaceWebview.ts'), 'utf8');
+
+    function extractPerformCopy(): (sel: unknown, model: unknown, navigator: unknown) => void {
+        // Extract performCopy function body and wrap it for testing
+        const fnMatch = src.match(/function performCopy\(\)\s*\{([\s\S]*?)\n    \}/);
+        expect(fnMatch).not.toBeNull();
+        const body = fnMatch![1]
+            .replace(/window\.monacoEditor\.getSelection\(\)/g, '_sel')
+            .replace(/window\.monacoEditor\.getModel\(\)/g, '_model');
+        // eslint-disable-next-line no-new-func
+        return new Function('_sel', '_model', 'navigator', body) as (sel: unknown, model: unknown, navigator: unknown) => void;
+    }
+
+    it('copies selected text to clipboard when selection is non-empty', async () => {
+        const written: string[] = [];
+        const navigator = { clipboard: { writeText: (t: string) => { written.push(t); return Promise.resolve(); } } };
+        const sel = { isEmpty: () => false, startLineNumber: 1 };
+        const model = { getLineContent: (_n: number) => 'full line', getValueInRange: (_s: unknown) => 'selected text' };
+        const fn = extractPerformCopy();
+        fn(sel, model, navigator);
+        expect(written).toEqual(['selected text']);
+    });
+
+    it('copies current line when selection is empty (cursor on line)', async () => {
+        const written: string[] = [];
+        const navigator = { clipboard: { writeText: (t: string) => { written.push(t); return Promise.resolve(); } } };
+        const sel = { isEmpty: () => true, startLineNumber: 3 };
+        const model = { getLineContent: (n: number) => `line ${n}`, getValueInRange: (_s: unknown) => '' };
+        const fn = extractPerformCopy();
+        fn(sel, model, navigator);
+        expect(written).toEqual(['line 3']);
+    });
+
+    it('does not modify the model on copy', () => {
+        const written: string[] = [];
+        const navigator = { clipboard: { writeText: (t: string) => { written.push(t); return Promise.resolve(); } } };
+        const sel = { isEmpty: () => false, startLineNumber: 1 };
+        let editsApplied = false;
+        const model = {
+            getLineContent: (_n: number) => 'full line',
+            getValueInRange: (_s: unknown) => 'hello',
+            executeEdits: () => { editsApplied = true; },
+        };
+        const fn = extractPerformCopy();
+        fn(sel, model, navigator);
+        expect(editsApplied).toBe(false);
+        expect(written).toEqual(['hello']);
+    });
+
+    it('registers Ctrl+C command for performCopy', () => {
+        expect(src).toMatch(/addCommand.*KeyC.*performCopy/);
+    });
+
+    it('registers clipboardCopyAction for performCopy', () => {
+        expect(src).toMatch(/id:\s*'editor\.action\.clipboardCopyAction'/);
+        expect(src).toMatch(/label:\s*'Copy'/);
+    });
+});
