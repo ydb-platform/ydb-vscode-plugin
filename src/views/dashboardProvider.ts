@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../services/connectionManager';
 import { DashboardMetrics } from '../models/types';
-import { getMonitoringUrl, extractAuthToken } from '../models/connectionProfile';
+import { getMonitoringUrl } from '../models/connectionProfile';
 import { fetchDashboardMetrics } from '../commands/viewCommands';
+import { MonitoringAuthClient, buildMonitoringAuthClient } from '../services/monitoringAuthClient';
+import { QueryService } from '../services/queryService';
 
 export class DashboardProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private readonly _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
@@ -11,6 +13,9 @@ export class DashboardProvider implements vscode.TreeDataProvider<vscode.TreeIte
     private metrics: DashboardMetrics | undefined;
     private error: string | undefined;
     private refreshTimer: ReturnType<typeof setInterval> | undefined;
+    private authClient: MonitoringAuthClient | undefined;
+    private authClientProfileId: string | undefined;
+    private authClientMonitoringUrl: string | undefined;
 
     constructor(private connectionManager: ConnectionManager) {
         this.startAutoRefresh();
@@ -87,11 +92,17 @@ export class DashboardProvider implements vscode.TreeDataProvider<vscode.TreeIte
         storageItem.tooltip = `Storage: ${storagePercent.toFixed(1)}%\n${this.formatBytes(m.storageUsed)} / ${this.formatBytes(m.storageTotal)}`;
         items.push(storageItem);
 
-        const nodesItem = new vscode.TreeItem('Nodes', vscode.TreeItemCollapsibleState.None);
-        nodesItem.description = `${m.nodes.length}`;
-        nodesItem.iconPath = new vscode.ThemeIcon('server');
-        nodesItem.tooltip = `Total nodes: ${m.nodes.length}`;
-        items.push(nodesItem);
+        const networkItem = new vscode.TreeItem('Network', vscode.TreeItemCollapsibleState.None);
+        networkItem.description = this.formatBytesPerSec(m.networkThroughput);
+        networkItem.iconPath = new vscode.ThemeIcon('globe');
+        networkItem.tooltip = `Network write throughput: ${this.formatBytesPerSec(m.networkThroughput)}`;
+        items.push(networkItem);
+
+        const queriesItem = new vscode.TreeItem('Running queries', vscode.TreeItemCollapsibleState.None);
+        queriesItem.description = `${m.runningQueries}`;
+        queriesItem.iconPath = new vscode.ThemeIcon('play');
+        queriesItem.tooltip = `Currently executing queries: ${m.runningQueries}`;
+        items.push(queriesItem);
 
         return items;
     }
@@ -104,6 +115,14 @@ export class DashboardProvider implements vscode.TreeDataProvider<vscode.TreeIte
             return new vscode.ThemeColor('charts.yellow');
         }
         return new vscode.ThemeColor('charts.red');
+    }
+
+    private formatBytesPerSec(bytes: number): string {
+        const kbps = bytes / 1024;
+        if (kbps > 1024) {
+            return `${(kbps / 1024).toFixed(0)} MB/s`;
+        }
+        return `${kbps.toFixed(0)} KB/s`;
     }
 
     private formatBytes(bytes: number): string {
@@ -137,8 +156,26 @@ export class DashboardProvider implements vscode.TreeDataProvider<vscode.TreeIte
             return;
         }
 
+        if (
+            !this.authClient
+            || this.authClientProfileId !== profile.id
+            || this.authClientMonitoringUrl !== monitoringUrl
+        ) {
+            this.authClient = buildMonitoringAuthClient(monitoringUrl, profile);
+            this.authClientProfileId = profile.id;
+            this.authClientMonitoringUrl = monitoringUrl;
+        }
+
+        let queryService: QueryService | undefined;
         try {
-            this.metrics = await fetchDashboardMetrics(monitoringUrl, extractAuthToken(profile));
+            const driver = await this.connectionManager.getDriver();
+            queryService = new QueryService(driver);
+        } catch {
+            queryService = undefined;
+        }
+
+        try {
+            this.metrics = await fetchDashboardMetrics(monitoringUrl, this.authClient, queryService);
             this.error = undefined;
         } catch (err: unknown) {
             this.error = err instanceof Error ? err.message : String(err);

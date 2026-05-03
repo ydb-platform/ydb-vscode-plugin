@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { extractTablePath, truncateCachedState, PersistedWorkspaceState } from '../../views/queryWorkspaceWebview';
+import { extractTablePath, truncateCachedState, PersistedWorkspaceState, getScript } from '../../views/queryWorkspaceWebview';
+import { buildConverterHtml } from '../../views/dialectConverterWebview';
+import { buildFormHtml } from '../../views/connectionFormWebview';
 
 describe('extractTablePath', () => {
     it('extracts backtick-quoted table path from simple SELECT', () => {
@@ -448,7 +450,7 @@ describe('webview JS: performCopy', () => {
 
     function extractPerformCopy(): (sel: unknown, model: unknown, navigator: unknown) => void {
         // Extract performCopy function body and wrap it for testing
-        const fnMatch = src.match(/function performCopy\(\)\s*\{([\s\S]*?)\n    \}/);
+        const fnMatch = src.match(/function performCopy\(\)\s*\{([\s\S]*?)\n {4}\}/);
         expect(fnMatch).not.toBeNull();
         const body = fnMatch![1]
             .replace(/window\.monacoEditor\.getSelection\(\)/g, '_sel')
@@ -500,5 +502,85 @@ describe('webview JS: performCopy', () => {
     it('registers clipboardCopyAction for performCopy', () => {
         expect(src).toMatch(/id:\s*'editor\.action\.clipboardCopyAction'/);
         expect(src).toMatch(/label:\s*'Copy'/);
+    });
+});
+
+// Helper: extract all <script>...</script> blocks from HTML and check JS syntax
+function extractScriptBlocks(html: string): string[] {
+    const blocks: string[] = [];
+    const re = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+    let m;
+    while ((m = re.exec(html)) !== null) {
+        const code = m[1].trim();
+        if (code) {
+            blocks.push(code);
+        }
+    }
+    return blocks;
+}
+
+function assertValidJs(code: string, label: string): void {
+    try {
+        // new Function() parses the code as a function body — catches SyntaxError
+        new Function(code);
+    } catch (e) {
+        const err = e as SyntaxError;
+        // Find the offending line for a helpful message
+        const lines = code.split('\n');
+        let context = '';
+        if (err.stack) {
+            const stackLineMatch = err.stack.match(/<anonymous>:(\d+):(\d+)/);
+            if (stackLineMatch) {
+                const lineNum = parseInt(stackLineMatch[1], 10) - 2; // Function wrapper offset
+                const start = Math.max(0, lineNum - 2);
+                const end = Math.min(lines.length, lineNum + 3);
+                context = lines.slice(start, end).map((l, i) => {
+                    const num = start + i + 1;
+                    const marker = num === lineNum ? ' >>>' : '    ';
+                    return `${marker} ${num}: ${l}`;
+                }).join('\n');
+            }
+        }
+        throw new Error(
+            `${label}: generated JS has syntax error: ${err.message}\n${context}`,
+        );
+    }
+}
+
+describe('webview inline JS syntax validity', () => {
+    it('getScript() produces syntactically valid JavaScript', () => {
+        const script = getScript(JSON.stringify('SELECT 1'), 'vs-dark', JSON.stringify('workspace-1'));
+        assertValidJs(script, 'getScript');
+    });
+
+    it('getScript() with empty content produces valid JavaScript', () => {
+        const script = getScript(JSON.stringify(''), 'vs', JSON.stringify(''));
+        assertValidJs(script, 'getScript (empty)');
+    });
+
+    it('getScript() with special characters in content produces valid JavaScript', () => {
+        const script = getScript(JSON.stringify("SELECT * FROM `table` WHERE x = '\\n'"), 'vs-dark', JSON.stringify('ws-2'));
+        assertValidJs(script, 'getScript (special chars)');
+    });
+
+    it('buildConverterHtml() inline scripts are syntactically valid', () => {
+        const html = buildConverterHtml();
+        const blocks = extractScriptBlocks(html);
+        expect(blocks.length).toBeGreaterThan(0);
+        blocks.forEach((code, i) => assertValidJs(code, `buildConverterHtml script#${i}`));
+    });
+
+    it('buildFormHtml(false) inline scripts are syntactically valid', () => {
+        const html = buildFormHtml(false);
+        const blocks = extractScriptBlocks(html);
+        expect(blocks.length).toBeGreaterThan(0);
+        blocks.forEach((code, i) => assertValidJs(code, `buildFormHtml(false) script#${i}`));
+    });
+
+    it('buildFormHtml(true) inline scripts are syntactically valid', () => {
+        const html = buildFormHtml(true);
+        const blocks = extractScriptBlocks(html);
+        expect(blocks.length).toBeGreaterThan(0);
+        blocks.forEach((code, i) => assertValidJs(code, `buildFormHtml(true) script#${i}`));
     });
 });

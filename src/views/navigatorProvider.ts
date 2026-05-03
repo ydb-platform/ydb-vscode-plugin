@@ -4,6 +4,7 @@ import { SchemeService } from '../services/schemeService';
 import { QueryService } from '../services/queryService';
 import { SchemeEntryType } from '../models/types';
 import { NavigatorItem, getContextValue, isExpandable } from './navigatorItems';
+import { isStreamingQueryErrorStatus, buildStreamingQueryTooltip } from '../utils/streamingQueryStatus';
 
 interface RootFolder {
     label: string;
@@ -300,6 +301,7 @@ export class YdbNavigatorProvider implements vscode.TreeDataProvider<NavigatorIt
                 const driver = await this.connectionManager.getDriver();
                 const schemeService = new SchemeService(driver);
                 items = await this.getChildEntries(schemeService, element);
+                await this.decorateTransferItems(items, profile.database);
             }
 
             // Show placeholder when an expandable node has no children
@@ -462,7 +464,12 @@ export class YdbNavigatorProvider implements vscode.TreeDataProvider<NavigatorIt
             for (const query of queries) {
                 const parts = query.fullPath.split('/');
                 const name = parts[parts.length - 1];
-                const contextVal = query.status === 'RUNNING' ? 'streaming-query-running' : 'streaming-query-stopped';
+                const hasError = isStreamingQueryErrorStatus(query.status);
+                const contextVal = hasError
+                    ? 'streaming-query-error'
+                    : query.status === 'RUNNING'
+                        ? 'streaming-query-running'
+                        : 'streaming-query-stopped';
                 const item = new NavigatorItem(
                     name,
                     query.fullPath,
@@ -471,18 +478,18 @@ export class YdbNavigatorProvider implements vscode.TreeDataProvider<NavigatorIt
                     contextVal,
                     rootSection,
                 );
-                item.description = query.status;
-                item.iconPath = query.status === 'RUNNING'
-                    ? new vscode.ThemeIcon('play-circle')
-                    : new vscode.ThemeIcon('debug-stop');
-
-                if (parts.length === 1) {
-                    items.push(item);
+                item.description = parts.length === 1
+                    ? query.status
+                    : `${query.fullPath} — ${query.status}`;
+                item.tooltip = buildStreamingQueryTooltip(query);
+                if (hasError) {
+                    item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
+                } else if (query.status === 'RUNNING') {
+                    item.iconPath = new vscode.ThemeIcon('play-circle');
                 } else {
-                    // For simplicity, show flat list under streaming queries root
-                    item.description = `${query.fullPath} — ${query.status}`;
-                    items.push(item);
+                    item.iconPath = new vscode.ThemeIcon('debug-stop');
                 }
+                items.push(item);
             }
 
             return items;
@@ -526,6 +533,38 @@ export class YdbNavigatorProvider implements vscode.TreeDataProvider<NavigatorIt
         } catch {
             return [];
         }
+    }
+
+    private async decorateTransferItems(items: NavigatorItem[], database: string): Promise<void> {
+        const transfers = items.filter(i => i.contextValue === 'transfer');
+        if (transfers.length === 0) { return; }
+        const db = database.endsWith('/') ? database.slice(0, -1) : database;
+        let queryService: QueryService;
+        try {
+            const driver = await this.connectionManager.getDriver();
+            queryService = new QueryService(driver);
+        } catch {
+            return;
+        }
+        await Promise.all(transfers.map(async (item) => {
+            const fullPath = item.fullPath.startsWith('/') ? item.fullPath : `${db}/${item.fullPath}`;
+            try {
+                const desc = await queryService.describeTransfer(fullPath);
+                const tooltipLines = [item.fullPath, `State: ${desc.state}`];
+                if (desc.sourcePath) { tooltipLines.push(`Source: ${desc.sourcePath}`); }
+                if (desc.destinationPath) { tooltipLines.push(`Destination: ${desc.destinationPath}`); }
+                item.tooltip = tooltipLines.join('\n');
+                if (desc.state === 'Error') {
+                    (item as { contextValue: string }).contextValue = 'transfer-error';
+                    item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
+                    item.description = 'Error';
+                } else if (desc.state !== 'Unknown') {
+                    item.description = desc.state;
+                }
+            } catch {
+                // ignore — keep default icon/tooltip
+            }
+        }));
     }
 
     private async getChildEntries(schemeService: SchemeService, parent: NavigatorItem): Promise<NavigatorItem[]> {

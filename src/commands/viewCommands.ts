@@ -4,12 +4,11 @@ import { SchemeService } from '../services/schemeService';
 import { QueryService } from '../services/queryService';
 import { PermissionsProvider } from '../views/permissionsProvider';
 import { NavigatorItem } from '../views/navigatorItems';
-import { DashboardMetrics, NodeInfo, SchemeEntryType } from '../models/types';
-import { getMonitoringUrl, extractAuthToken } from '../models/connectionProfile';
+import { DashboardMetrics, SchemeEntryType } from '../models/types';
+import { getMonitoringUrl } from '../models/connectionProfile';
+import { MonitoringAuthClient, buildMonitoringAuthClient } from '../services/monitoringAuthClient';
 import { generateTableDDL, generateViewDDL, generateTransferDDL, generateExternalTableDDL, generateStreamingQueryDDL } from '../utils/ddlGenerator.js';
 import { DialectConverterViewProvider } from '../views/dialectConverterWebview';
-import * as https from 'https';
-import * as http from 'http';
 
 export function registerViewCommands(
     context: vscode.ExtensionContext,
@@ -102,10 +101,19 @@ async function showDashboard(connectionManager: ConnectionManager): Promise<void
 
     dashboardPanel.webview.html = buildDashboardHtml(profile.name);
 
+    const authClient = buildMonitoringAuthClient(monitoringUrl, profile);
+
     const sendMetrics = async () => {
         if (!dashboardPanel) {return;}
         try {
-            const metrics = await fetchDashboardMetrics(monitoringUrl, extractAuthToken(profile));
+            let queryService: QueryService | undefined;
+            try {
+                const driver = await connectionManager.getDriver();
+                queryService = new QueryService(driver);
+            } catch {
+                queryService = undefined;
+            }
+            const metrics = await fetchDashboardMetrics(monitoringUrl, authClient, queryService);
             dashboardPanel.webview.postMessage({ type: 'dashboardData', metrics });
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
@@ -117,10 +125,19 @@ async function showDashboard(connectionManager: ConnectionManager): Promise<void
     dashboardInterval = setInterval(sendMetrics, 5000);
 }
 
-export async function fetchDashboardMetrics(monitoringUrl: string, authToken?: string): Promise<DashboardMetrics> {
+export async function fetchDashboardMetrics(
+    monitoringUrl: string,
+    authClient: MonitoringAuthClient,
+    queryService?: QueryService,
+): Promise<DashboardMetrics> {
     const viewerUrl = `${monitoringUrl}/viewer/json/cluster`;
-    const data = await httpGet(viewerUrl, MAX_REDIRECTS, authToken);
-    const json = JSON.parse(data);
+
+    const [clusterData, runningQueries] = await Promise.all([
+        authClient.httpGet(viewerUrl),
+        fetchRunningQueriesCount(queryService),
+    ]);
+
+    const json = JSON.parse(clusterData);
 
     const metrics: DashboardMetrics = {
         cpuUsed: 0,
@@ -130,7 +147,7 @@ export async function fetchDashboardMetrics(monitoringUrl: string, authToken?: s
         memoryUsed: 0,
         memoryTotal: 0,
         networkThroughput: 0,
-        nodes: [],
+        runningQueries,
     };
 
     // Parse cluster-level metrics (values come as strings from YDB Viewer API)
@@ -153,70 +170,25 @@ export async function fetchDashboardMetrics(monitoringUrl: string, authToken?: s
         metrics.storageTotal = parseInt(String(json.StorageTotal), 10) || 0;
     }
     if (json.NetworkWriteThroughput !== undefined) {
-        metrics.networkThroughput = (parseFloat(String(json.NetworkWriteThroughput)) || 0) / (1024 * 1024);
-    }
-
-    // Parse node-level metrics
-    if (json.Nodes && Array.isArray(json.Nodes)) {
-        for (const node of json.Nodes) {
-            const ss = node.SystemState ?? {};
-            const nodeInfo: NodeInfo = {
-                nodeId: node.NodeId ?? 0,
-                host: node.Host || ss.Host || '',
-                status: ss.Overall ?? ss.toString?.() ?? 'unknown',
-                uptime: node.StartTime ? Date.now() / 1000 - node.StartTime : 0,
-                cpuUsage: 0,
-                memoryUsage: 0,
-            };
-
-            if (ss.LoadAverage && Array.isArray(ss.LoadAverage) && ss.LoadAverage.length > 0) {
-                const cpus = ss.NumberOfCpus || 1;
-                nodeInfo.cpuUsage = ss.LoadAverage[0] / cpus;
-            }
-            if (ss.MemoryUsed && ss.MemoryLimit) {
-                nodeInfo.memoryUsage = ss.MemoryUsed / ss.MemoryLimit;
-            }
-
-            metrics.nodes.push(nodeInfo);
-        }
+        metrics.networkThroughput = parseFloat(String(json.NetworkWriteThroughput)) || 0;
     }
 
     return metrics;
 }
 
-const MAX_REDIRECTS = 5;
-
-export function httpGet(url: string, redirectsLeft = MAX_REDIRECTS, authToken?: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const client = url.startsWith('https') ? https : http;
-        const headers: Record<string, string> = { 'Accept': 'application/json' };
-        if (authToken) {
-            headers['Authorization'] = `OAuth ${authToken}`;
-        }
-        client.get(url, { headers }, (res) => {
-            const status = res.statusCode ?? 0;
-            if ([301, 302, 303, 307, 308].includes(status)) {
-                const location = res.headers.location;
-                if (!location || redirectsLeft <= 0) {
-                    reject(new Error(`Redirect failed from ${url}`));
-                    return;
-                }
-                const next = location.startsWith('/')
-                    ? new URL(location, url).href
-                    : location;
-                httpGet(next, redirectsLeft - 1, authToken).then(resolve, reject);
-                return;
-            }
-            if (status !== 200) {
-                reject(new Error(`HTTP ${status} from ${url}`));
-                return;
-            }
-            let data = '';
-            res.on('data', (chunk: Buffer) => { data += chunk.toString(); });
-            res.on('end', () => resolve(data));
-            res.on('error', reject);
-        }).on('error', reject);
-    });
+async function fetchRunningQueriesCount(queryService: QueryService | undefined): Promise<number> {
+    if (!queryService) {return 0;}
+    try {
+        const result = await queryService.executeQuery(
+            "SELECT COUNT(*) AS Cnt FROM `.sys/query_sessions` WHERE State = 'EXECUTING'",
+        );
+        const row = result.rows?.[0];
+        if (!row) {return 0;}
+        const cnt = row.Cnt ?? row.cnt ?? 0;
+        return Number(cnt) || 0;
+    } catch {
+        return 0;
+    }
 }
 
 function buildDashboardHtml(name: string): string {
@@ -295,6 +267,8 @@ function onData(m) {
     html += donutCard('CPU', cpuPct, m.cpuUsed.toFixed(1) + ' / ' + m.cpuTotal + ' cores');
     html += donutCard('Memory', memPct, formatBytes(m.memoryUsed) + ' / ' + formatBytes(m.memoryTotal));
     html += donutCard('Storage', storagePct, formatBytes(m.storageUsed) + ' / ' + formatBytes(m.storageTotal));
+    html += donutCard('Network', 0, formatBytesPerSec(m.networkThroughput), true);
+    html += donutCard('Running queries', 0, String(m.runningQueries), true);
     html += '</div>';
 
     html += '<div class="dash-charts">';
@@ -309,7 +283,7 @@ function onData(m) {
     setTimeout(() => {
         drawArea('chartCpu', history.cpu, '%');
         drawArea('chartMem', history.memory, 'bytes');
-        drawArea('chartNet', history.network, 'MB/s');
+        drawArea('chartNet', history.network, 'bytes/s');
     }, 0);
 }
 
@@ -367,6 +341,7 @@ function drawArea(canvasId, data, unit) {
         ctx.fillStyle = fg; ctx.font = '9px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
         let label = (minVal + (i / 3) * range).toFixed(1);
         if (unit === 'bytes') label = formatBytes(minVal + (i / 3) * range);
+        else if (unit === 'bytes/s') label = formatBytes(minVal + (i / 3) * range) + '/s';
         ctx.fillText(label, 38, y);
     }
 
@@ -400,6 +375,7 @@ function drawArea(canvasId, data, unit) {
     const cur = values[values.length - 1];
     let curText = cur.toFixed(1);
     if (unit === 'bytes') curText = formatBytes(cur);
+    else if (unit === 'bytes/s') curText = formatBytes(cur) + '/s';
     else if (unit) curText += ' ' + unit;
     ctx.fillText(curText, startX, 0);
 }
@@ -410,6 +386,12 @@ function formatBytes(bytes) {
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
     const i = Math.floor(Math.log(Math.abs(bytes)) / Math.log(k));
     return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+}
+
+function formatBytesPerSec(bytes) {
+    const kbps = bytes / 1024;
+    if (kbps > 1024) return (kbps / 1024).toFixed(0) + ' MB/s';
+    return kbps.toFixed(0) + ' KB/s';
 }
 
 function esc(text) {

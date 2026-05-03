@@ -5,6 +5,12 @@ import { RagService, detectAndEnsureRag, checkOllamaAvailable } from '../service
 
 const panels: Map<string, vscode.WebviewPanel> = new Map();
 
+export function computeMonitoringUrl(host: string, secure: boolean): string {
+    const trimmed = host.trim();
+    if (!trimmed) return '';
+    return `${secure ? 'https' : 'http'}://${trimmed}:8765`;
+}
+
 export function showConnectionForm(connectionManager: ConnectionManager, editProfile?: ConnectionProfile, ragService?: RagService): void {
     const panelKey = editProfile ? `edit-${editProfile.id}` : 'new';
 
@@ -418,6 +424,11 @@ export function buildFormHtml(isEdit: boolean): string {
         <div class="validation-error" id="database-error">Database is required</div>
     </div>
 
+    <div class="field">
+        <label>Monitoring URL</label>
+        <input type="text" id="monitoringUrl" placeholder="http://localhost:8765 (optional)">
+    </div>
+
     <hr class="separator">
 
     <div class="field">
@@ -474,11 +485,6 @@ export function buildFormHtml(isEdit: boolean): string {
         <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:2px">Optional. Overrides the built-in Yandex Cloud CA. Also configurable via <code>ydb.tlsCaCertFile</code> setting.</div>
     </div>
 
-    <div class="field">
-        <label>Monitoring URL</label>
-        <input type="text" id="monitoringUrl" placeholder="http://localhost:8765 (optional)">
-    </div>
-
     <div class="test-result" id="testResult"></div>
 
     <hr class="separator">
@@ -522,6 +528,26 @@ export function buildFormHtml(isEdit: boolean): string {
     const authType = document.getElementById('authType');
     authType.addEventListener('change', updateAuthFields);
     updateAuthFields();
+
+    let monitoringUrlAuto = true;
+
+    function computeMonitoringUrl() {
+        const host = document.getElementById('host').value.trim();
+        if (!host) return '';
+        const secure = document.getElementById('secure').checked;
+        return (secure ? 'https' : 'http') + '://' + host + ':8765';
+    }
+
+    function refreshMonitoringUrl() {
+        if (!monitoringUrlAuto) return;
+        document.getElementById('monitoringUrl').value = computeMonitoringUrl();
+    }
+
+    document.getElementById('host').addEventListener('input', refreshMonitoringUrl);
+    document.getElementById('secure').addEventListener('change', refreshMonitoringUrl);
+    document.getElementById('monitoringUrl').addEventListener('input', function() {
+        monitoringUrlAuto = this.value.trim() === computeMonitoringUrl();
+    });
 
     function updateAuthFields() {
         document.querySelectorAll('.auth-fields').forEach(el => el.classList.remove('visible'));
@@ -727,6 +753,11 @@ export function buildFormHtml(isEdit: boolean): string {
         document.getElementById('tlsCaCertFile').value = profile.tlsCaCertFile || '';
         document.getElementById('useRag').checked = profile.useRag !== false;
         updateAuthFields();
+        const currentMonitoring = document.getElementById('monitoringUrl').value.trim();
+        monitoringUrlAuto = currentMonitoring === '' || currentMonitoring === computeMonitoringUrl();
+        if (monitoringUrlAuto) {
+            refreshMonitoringUrl();
+        }
     }
 
     window.addEventListener('message', event => {

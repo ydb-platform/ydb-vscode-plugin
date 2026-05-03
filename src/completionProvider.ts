@@ -248,6 +248,15 @@ export class YqlCompletionProvider implements vscode.CompletionItemProvider {
         const textBefore = text.slice(0, offset);
         const insideBacktick = (textBefore.split('`').length % 2) === 0;
 
+        // Extract entity path prefix from inside backticks (text after the last opening backtick)
+        let entityPrefix = '';
+        if (insideBacktick) {
+            const lastBacktickPos = textBefore.lastIndexOf('`');
+            if (lastBacktickPos !== -1) {
+                entityPrefix = textBefore.slice(lastBacktickPos + 1);
+            }
+        }
+
         let hasViewerResults = false;
 
         // 1. Try viewer API first (fast HTTP call)
@@ -257,10 +266,15 @@ export class YqlCompletionProvider implements vscode.CompletionItemProvider {
                 if (profile) {
                     const monitoringUrl = getMonitoringUrl(profile);
                     if (monitoringUrl) {
+                        const normalizedPrefix = normalizeEntityPrefix(entityPrefix, profile.database);
+                        const lastSlash = normalizedPrefix.lastIndexOf('/');
+                        const prefixUpToLastSlash = lastSlash >= 0
+                            ? normalizedPrefix.slice(0, lastSlash + 1)
+                            : '';
                         const entities = await fetchEntities(
                             monitoringUrl,
                             profile.database,
-                            '',
+                            normalizedPrefix,
                             extractAuthToken(profile),
                         );
                         const filtered = entities.filter(e =>
@@ -268,12 +282,25 @@ export class YqlCompletionProvider implements vscode.CompletionItemProvider {
                         );
                         for (const entity of filtered) {
                             const isDir = DIRECTORY_TYPES.has(entity.Type);
+                            let label: string;
+                            let insertText: string;
+                            if (insideBacktick) {
+                                const shortName = entity.Name.startsWith(prefixUpToLastSlash)
+                                    ? entity.Name.slice(prefixUpToLastSlash.length)
+                                    : entity.Name;
+                                label = isDir ? shortName + '/' : shortName;
+                                insertText = label;
+                            } else {
+                                label = entity.Name;
+                                insertText = `\`${entity.Name}\``;
+                            }
                             const item = new vscode.CompletionItem(
-                                entity.Name,
+                                label,
                                 isDir ? vscode.CompletionItemKind.Folder : vscode.CompletionItemKind.Value,
                             );
                             item.detail = entity.Type;
-                            item.sortText = '0_' + entity.Name;
+                            item.insertText = insertText;
+                            item.sortText = '0_' + label;
                             items.push(item);
                         }
                         hasViewerResults = filtered.length > 0;
@@ -286,19 +313,49 @@ export class YqlCompletionProvider implements vscode.CompletionItemProvider {
 
         // 2. Fall back to SchemeService (may be slow on large catalogs)
         const tables = await this.navigatorProvider.ensureTableNamesLoaded();
+
+        // Compute prefix for filtering (mirrors viewer API logic above)
+        let normalizedPrefixFallback = '';
+        let prefixUpToLastSlashFallback = '';
+        if (insideBacktick && this.connectionManager) {
+            const profile = this.connectionManager.getActiveProfile();
+            if (profile) {
+                normalizedPrefixFallback = normalizeEntityPrefix(entityPrefix, profile.database);
+                const lastSlash = normalizedPrefixFallback.lastIndexOf('/');
+                prefixUpToLastSlashFallback = lastSlash >= 0
+                    ? normalizedPrefixFallback.slice(0, lastSlash + 1)
+                    : '';
+            }
+        }
+
         for (const table of tables) {
-            // Skip if viewer API already returned results and this table is likely a duplicate
-            if (hasViewerResults) {
-                const shortName = table.split('/').pop() ?? table;
-                if (items.some(i => i.label === shortName)) {
+            let label: string;
+            let insertText: string;
+            if (insideBacktick) {
+                // Filter to only tables matching the typed prefix
+                if (normalizedPrefixFallback && !table.startsWith(normalizedPrefixFallback)) {
                     continue;
                 }
+                // Show relative path (strip the prefix up to last slash)
+                label = table.startsWith(prefixUpToLastSlashFallback)
+                    ? table.slice(prefixUpToLastSlashFallback.length)
+                    : table;
+                insertText = label;
+            } else {
+                // Outside backtick: show full path, insert with backticks
+                label = table;
+                insertText = `\`${table}\``;
             }
-            const shortName = table.split('/').pop() ?? table;
-            const item = new vscode.CompletionItem(shortName, vscode.CompletionItemKind.Value);
+
+            // Skip duplicates already returned by viewer API
+            if (hasViewerResults && items.some(i => i.label === label)) {
+                continue;
+            }
+
+            const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Value);
             item.detail = table;
-            item.insertText = insideBacktick ? table : `\`${table}\``;
-            item.sortText = '0_' + shortName;
+            item.insertText = insertText;
+            item.sortText = '0_' + label;
             items.push(item);
         }
 

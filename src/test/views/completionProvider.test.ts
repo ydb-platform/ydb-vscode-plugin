@@ -1,6 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { YqlCompletionProvider } from '../../completionProvider';
 import { CompletionItemKind } from 'vscode';
+import * as viewerService from '../../services/viewerService';
+
+vi.mock('../../services/viewerService', () => ({
+    fetchEntities: vi.fn(),
+    fetchColumns: vi.fn(),
+}));
 
 function makeDoc(text: string) {
     return {
@@ -47,8 +53,8 @@ describe('YqlCompletionProvider', () => {
         const tableItems = items.filter(i => i.kind === CompletionItemKind.Value);
         expect(tableItems.length).toBeGreaterThanOrEqual(2);
         const labels = tableItems.map(i => i.label as string);
-        expect(labels).toContain('users');
-        expect(labels).toContain('orders');
+        expect(labels).toContain('path/to/users');
+        expect(labels).toContain('path/to/orders');
     });
 
     it('suggests types after CAST AS', async () => {
@@ -106,7 +112,7 @@ describe('YqlCompletionProvider', () => {
             makePos(0, 14),
         );
         const tableItems = items.filter(i => i.kind === CompletionItemKind.Value);
-        const usersItem = tableItems.find(i => i.label === 'users');
+        const usersItem = tableItems.find(i => i.label === 'path/to/users');
         expect(usersItem?.insertText).toBe('`path/to/users`');
     });
 
@@ -161,5 +167,182 @@ describe('YqlCompletionProvider', () => {
         const labels = windowFunctions.map(f => f.label as string);
         expect(labels).toContain('ROW_NUMBER');
         expect(labels).toContain('LAG');
+    });
+});
+
+describe('YqlCompletionProvider — path autocomplete via viewer API', () => {
+    const mockFetchEntities = vi.mocked(viewerService.fetchEntities);
+    const mockFetchColumns = vi.mocked(viewerService.fetchColumns);
+
+    const mockConnectionManager = {
+        getActiveProfile: () => ({
+            endpoint: 'grpc://localhost:2136',
+            database: '/root',
+            monitoringUrl: 'http://localhost:8765',
+            authType: 'anonymous' as const,
+        }),
+    };
+
+    const mockNavigatorProvider = {
+        getTableNames: () => [],
+        ensureTableNamesLoaded: async () => [],
+    } as never;
+
+    beforeEach(() => {
+        mockFetchColumns.mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('passes empty prefix to fetchEntities when no backtick context', async () => {
+        mockFetchEntities.mockResolvedValue([
+            { Name: 'table1', Type: 'table', Parent: '' },
+        ]);
+        const prov = new YqlCompletionProvider(mockNavigatorProvider, mockConnectionManager as never);
+        // column = text.length + 1 so cursor is at end of text
+        const text = 'SELECT * FROM ';
+        await prov.getCompletionItemsForText(text, 1, text.length + 1);
+        expect(mockFetchEntities).toHaveBeenCalledWith(
+            'http://localhost:8765',
+            '/root',
+            '',
+            undefined,
+        );
+    });
+
+    it('passes path prefix to fetchEntities when inside backtick', async () => {
+        mockFetchEntities.mockResolvedValue([
+            { Name: 'dir/table1', Type: 'table', Parent: '' },
+        ]);
+        const prov = new YqlCompletionProvider(mockNavigatorProvider, mockConnectionManager as never);
+        const text = 'SELECT * FROM `dir/tab';
+        await prov.getCompletionItemsForText(text, 1, text.length + 1);
+        expect(mockFetchEntities).toHaveBeenCalledWith(
+            'http://localhost:8765',
+            '/root',
+            'dir/tab',
+            undefined,
+        );
+    });
+
+    it('strips leading slash and database prefix from path prefix', async () => {
+        mockFetchEntities.mockResolvedValue([]);
+        const prov = new YqlCompletionProvider(mockNavigatorProvider, mockConnectionManager as never);
+        // /root/dir/tab — database is /root, so normalized prefix is dir/tab
+        const text = 'SELECT * FROM `/root/dir/tab';
+        await prov.getCompletionItemsForText(text, 1, text.length + 1);
+        expect(mockFetchEntities).toHaveBeenCalledWith(
+            'http://localhost:8765',
+            '/root',
+            'dir/tab',
+            undefined,
+        );
+    });
+
+    it('returns short name as label/insertText when inside backtick', async () => {
+        mockFetchEntities.mockResolvedValue([
+            { Name: 'dir/table1', Type: 'table', Parent: '' },
+            { Name: 'dir/table2', Type: 'table', Parent: '' },
+        ]);
+        const prov = new YqlCompletionProvider(mockNavigatorProvider, mockConnectionManager as never);
+        const text = 'SELECT * FROM `dir/';
+        const items = await prov.getCompletionItemsForText(text, 1, text.length + 1);
+        const values = items.filter(i => i.kind === CompletionItemKind.Value);
+        expect(values.length).toBe(2);
+        expect(values.map(i => i.label as string)).toContain('table1');
+        expect(values.map(i => i.label as string)).toContain('table2');
+        const t1 = values.find(i => i.label === 'table1');
+        expect(t1?.insertText).toBe('table1');
+    });
+
+    it('appends trailing slash to directory suggestions inside backtick', async () => {
+        mockFetchEntities.mockResolvedValue([
+            { Name: 'subdir', Type: 'dir', Parent: '' },
+        ]);
+        const prov = new YqlCompletionProvider(mockNavigatorProvider, mockConnectionManager as never);
+        const text = 'SELECT * FROM `';
+        const items = await prov.getCompletionItemsForText(text, 1, text.length + 1);
+        const folders = items.filter(i => i.kind === CompletionItemKind.Folder);
+        expect(folders.length).toBe(1);
+        expect(folders[0].label as string).toBe('subdir/');
+        expect(folders[0].insertText as string).toBe('subdir/');
+    });
+
+    it('wraps entity name in backticks when NOT inside backtick', async () => {
+        mockFetchEntities.mockResolvedValue([
+            { Name: 'table1', Type: 'table', Parent: '' },
+        ]);
+        const prov = new YqlCompletionProvider(mockNavigatorProvider, mockConnectionManager as never);
+        const text = 'SELECT * FROM ';
+        const items = await prov.getCompletionItemsForText(text, 1, text.length + 1);
+        const values = items.filter(i => i.kind === CompletionItemKind.Value);
+        const t1 = values.find(i => i.label === 'table1');
+        expect(t1?.insertText).toBe('`table1`');
+    });
+});
+
+describe('YqlCompletionProvider — SchemeService fallback backtick behavior', () => {
+    const mockFetchEntities = vi.mocked(viewerService.fetchEntities);
+    const mockFetchColumns = vi.mocked(viewerService.fetchColumns);
+
+    const mockConnectionManager = {
+        getActiveProfile: () => ({
+            endpoint: 'grpc://localhost:2136',
+            database: '/root',
+            monitoringUrl: undefined,
+            authType: 'anonymous' as const,
+        }),
+    };
+
+    const mockNavigatorProvider = {
+        getTableNames: () => ['path/to/users', 'path/to/orders'],
+        ensureTableNamesLoaded: async () => ['path/to/users', 'path/to/orders'],
+    } as never;
+
+    beforeEach(() => {
+        mockFetchEntities.mockRejectedValue(new Error('unavailable'));
+        mockFetchColumns.mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('inside backtick with no prefix — label = full path, insertText = full path', async () => {
+        const prov = new YqlCompletionProvider(mockNavigatorProvider, mockConnectionManager as never);
+        const text = 'SELECT * FROM `';
+        const items = await prov.getCompletionItemsForText(text, 1, text.length + 1);
+        const values = items.filter(i => i.kind === CompletionItemKind.Value);
+        const labels = values.map(i => i.label as string);
+        expect(labels).toContain('path/to/users');
+        expect(labels).toContain('path/to/orders');
+        const usersItem = values.find(i => i.label === 'path/to/users');
+        expect(usersItem?.insertText).toBe('path/to/users');
+    });
+
+    it('inside backtick with prefix path/to/ — label = users, insertText = users', async () => {
+        const prov = new YqlCompletionProvider(mockNavigatorProvider, mockConnectionManager as never);
+        const text = 'SELECT * FROM `path/to/';
+        const items = await prov.getCompletionItemsForText(text, 1, text.length + 1);
+        const values = items.filter(i => i.kind === CompletionItemKind.Value);
+        const labels = values.map(i => i.label as string);
+        expect(labels).toContain('users');
+        expect(labels).toContain('orders');
+        const usersItem = values.find(i => i.label === 'users');
+        expect(usersItem?.insertText).toBe('users');
+    });
+
+    it('inside backtick with partial prefix path/to/u — label = users, insertText = users', async () => {
+        const prov = new YqlCompletionProvider(mockNavigatorProvider, mockConnectionManager as never);
+        const text = 'SELECT * FROM `path/to/u';
+        const items = await prov.getCompletionItemsForText(text, 1, text.length + 1);
+        const values = items.filter(i => i.kind === CompletionItemKind.Value);
+        const labels = values.map(i => i.label as string);
+        expect(labels).toContain('users');
+        expect(labels).not.toContain('orders');
+        const usersItem = values.find(i => i.label === 'users');
+        expect(usersItem?.insertText).toBe('users');
     });
 });

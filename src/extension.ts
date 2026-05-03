@@ -208,7 +208,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerDeleteCommands(context, connectionManager, navigatorProvider);
 
     context.subscriptions.push(
-        vscode.languages.registerCompletionItemProvider('yql', completionProvider),
+        vscode.languages.registerCompletionItemProvider('yql', completionProvider, ' ', '.', '`', '/'),
     );
 
     // On connection change: switch navigator to cached tree, refresh others

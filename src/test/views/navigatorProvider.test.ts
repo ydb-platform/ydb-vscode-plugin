@@ -1,12 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { YdbNavigatorProvider } from '../../views/navigatorProvider';
 import { NavigatorItem } from '../../views/navigatorItems';
-import { TreeItemCollapsibleState } from 'vscode';
+import { SchemeEntryType } from '../../models/types';
+import { TreeItemCollapsibleState, ThemeIcon } from 'vscode';
+
+const queryServiceOverrides: {
+    loadStreamingQueries?: (db: string) => Promise<unknown>;
+    describeTransfer?: (path: string) => Promise<unknown>;
+} = {};
 
 vi.mock('../../services/queryService', () => ({
     QueryService: class {
-        loadStreamingQueries = vi.fn().mockResolvedValue([]);
+        loadStreamingQueries = vi.fn((db: string) =>
+            queryServiceOverrides.loadStreamingQueries?.(db) ?? Promise.resolve([]));
         loadResourcePools = vi.fn().mockResolvedValue([]);
+        describeTransfer = vi.fn((path: string) =>
+            queryServiceOverrides.describeTransfer?.(path) ?? Promise.reject(new Error('not mocked')));
     },
     CancellationError: class CancellationError extends Error {},
 }));
@@ -221,6 +230,61 @@ describe('YdbNavigatorProvider', () => {
         const children2 = await connectedProvider.getChildren();
         // Should return same cached reference
         expect(children1).toBe(children2);
+    });
+
+    describe('decorateTransferItems', () => {
+        const mgr = {
+            getActiveProfile: () => ({
+                id: 'test-id', name: 'Test',
+                endpoint: 'grpc://localhost:2135', database: '/mydb',
+                authType: 'anonymous', secure: false,
+            }),
+            getFocusedProfileId: () => 'test-id',
+            isConnected: () => true,
+            getDriver: vi.fn().mockResolvedValue({ database: '/mydb' }),
+        };
+
+        function makeTransferItem(fullPath: string): NavigatorItem {
+            return new NavigatorItem(
+                fullPath.split('/').pop() ?? fullPath,
+                fullPath, SchemeEntryType.TRANSFER,
+                TreeItemCollapsibleState.None, 'transfer', 'root-transfers',
+            );
+        }
+
+        it('marks transfer in Error state with error icon and description', async () => {
+            queryServiceOverrides.describeTransfer = async () => ({
+                state: 'Error', sourcePath: 's', destinationPath: 'd',
+            });
+            const p = new YdbNavigatorProvider(mgr as never);
+            const items = [makeTransferItem('t1')];
+            await (p as unknown as { decorateTransferItems(i: NavigatorItem[], db: string): Promise<void> })
+                .decorateTransferItems(items, '/mydb');
+            expect(items[0].contextValue).toBe('transfer-error');
+            expect((items[0].iconPath as ThemeIcon).id).toBe('error');
+            expect(items[0].description).toBe('Error');
+            expect(String(items[0].tooltip)).toContain('State: Error');
+        });
+
+        it('sets description to state for non-error transfers', async () => {
+            queryServiceOverrides.describeTransfer = async () => ({ state: 'Running' });
+            const p = new YdbNavigatorProvider(mgr as never);
+            const items = [makeTransferItem('t1')];
+            await (p as unknown as { decorateTransferItems(i: NavigatorItem[], db: string): Promise<void> })
+                .decorateTransferItems(items, '/mydb');
+            expect(items[0].contextValue).toBe('transfer');
+            expect(items[0].description).toBe('Running');
+        });
+
+        it('keeps defaults when describeTransfer throws', async () => {
+            queryServiceOverrides.describeTransfer = async () => { throw new Error('fail'); };
+            const p = new YdbNavigatorProvider(mgr as never);
+            const items = [makeTransferItem('t1')];
+            await (p as unknown as { decorateTransferItems(i: NavigatorItem[], db: string): Promise<void> })
+                .decorateTransferItems(items, '/mydb');
+            expect(items[0].contextValue).toBe('transfer');
+            expect(items[0].description).toBeUndefined();
+        });
     });
 
     it('root folders have correct labels', async () => {

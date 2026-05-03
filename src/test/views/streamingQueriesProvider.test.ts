@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 // StreamingQueriesProvider is part of navigatorProvider, not a separate file.
 // We test the streaming query data model here.
 import type { StreamingQuery } from '../../models/types';
+import { StreamingQueryItem } from '../../views/streamingQueriesProvider';
+import { ThemeIcon } from 'vscode';
 
 describe('StreamingQuery model', () => {
     it('has all required fields', () => {
@@ -51,5 +53,31 @@ describe('StreamingQuery model', () => {
         expect(query.retryCount).toBe(3);
         expect(query.lastFailAt).toBeDefined();
         expect(query.issues).toBe('some issue');
+    });
+});
+
+describe('StreamingQueryItem decoration', () => {
+    it('RUNNING: play-circle icon, no error context', () => {
+        const item = new StreamingQueryItem({
+            name: 'q', fullPath: 'q', status: 'RUNNING', queryText: '',
+        });
+        expect(item.contextValue).toBe('streaming-query-running');
+        expect((item.iconPath as ThemeIcon).id).toBe('play-circle');
+    });
+    it('error status gets error icon + error context + issues in tooltip', () => {
+        const item = new StreamingQueryItem({
+            name: 'q', fullPath: 'q', status: 'FAILED', queryText: '',
+            issues: JSON.stringify([{ message: 'boom', severity: 3 }]),
+        });
+        expect(item.contextValue).toBe('streaming-query-error');
+        expect((item.iconPath as ThemeIcon).id).toBe('error');
+        expect(String(item.tooltip)).toContain('[ERROR] boom');
+    });
+    it('stopped (non-error, non-running) gets debug-stop icon', () => {
+        const item = new StreamingQueryItem({
+            name: 'q', fullPath: 'q', status: 'STOPPED', queryText: '',
+        });
+        expect(item.contextValue).toBe('streaming-query-stopped');
+        expect((item.iconPath as ThemeIcon).id).toBe('debug-stop');
     });
 });

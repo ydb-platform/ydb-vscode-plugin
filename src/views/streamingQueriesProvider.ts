@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from '../services/connectionManager';
 import { QueryService } from '../services/queryService';
 import { StreamingQuery } from '../models/types';
+import { isStreamingQueryErrorStatus, buildStreamingQueryTooltip } from '../utils/streamingQueryStatus';
 
 type TreeNode = StreamingQueryItem | StreamingQueryFolderItem;
 
@@ -11,13 +12,20 @@ export class StreamingQueryItem extends vscode.TreeItem {
     ) {
         super(query.name, vscode.TreeItemCollapsibleState.None);
         this.description = query.status;
-        this.tooltip = `${query.fullPath}\nStatus: ${query.status}`;
-        this.contextValue = query.status === 'RUNNING'
-            ? 'streaming-query-running'
-            : 'streaming-query-stopped';
-        this.iconPath = query.status === 'RUNNING'
-            ? new vscode.ThemeIcon('play-circle')
-            : new vscode.ThemeIcon('debug-stop');
+        this.tooltip = buildStreamingQueryTooltip(query);
+        const hasError = isStreamingQueryErrorStatus(query.status);
+        this.contextValue = hasError
+            ? 'streaming-query-error'
+            : query.status === 'RUNNING'
+                ? 'streaming-query-running'
+                : 'streaming-query-stopped';
+        if (hasError) {
+            this.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
+        } else if (query.status === 'RUNNING') {
+            this.iconPath = new vscode.ThemeIcon('play-circle');
+        } else {
+            this.iconPath = new vscode.ThemeIcon('debug-stop');
+        }
     }
 }
 

@@ -17,4 +17,5 @@ out
 .gemini/
 CLAUDE.md
 upload-s3.sh
+.env*
 *.vsix

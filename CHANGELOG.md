@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-05-03
+
+### Added
+
+- **Monitoring authentication** — `MonitoringAuthClient` with OAuth token and login/password support, session caching with 1-hour TTL, and automatic re-login on 401
+- **Dashboard: Running queries** — new "Running queries" counter fetched from `.sys/query_sessions`
+- **Dashboard: Network throughput** — "Network" metric showing MB/s traffic
+- **Streaming query error detection** — error/failed/suspended status highlighted with red icon and rich tooltip (status, retry count, suspension info, issues with severity)
+- **Path-aware autocomplete** — context-sensitive completions inside backtick strings: relative paths shown without backtick wrapping, absolute insertions outside backticks
+- **Type decoder** — decodes base64-encoded `STRING` and `YSON` column values in query results; supports nested `Optional`, `List`, `Dict`, `Struct`, `Tuple`
+- **Auto-computed Monitoring URL** — connection form derives the monitoring URL from host/secure fields; manual override unlocks the field
+- **SVG icons** — new `activitybar-icon.svg` (monochrome, uses `currentColor`) and `icon.svg` (256×256, colored) for activity bar and Marketplace
+
 ## [0.1.0] - 2026-03-04
 
 ### Added
@@ -32,4 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SQL dialect converter** — convert SQL dialects to YQL (panel view)
 - **Connection import/export** — share connection profiles as JSON
 
+[0.1.2]: https://github.com/ydb-platform/ydb-vscode-plugin/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/ydb-platform/ydb-vscode-plugin/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ydb-platform/ydb-vscode-plugin/releases/tag/v0.1.0

@@ -1205,7 +1205,7 @@ th.col-pk { color: var(--vscode-symbolIcon-keywordForeground, #d19a66); }
 
 // ==================== Webview JavaScript ====================
 
-function getScript(escapedInitialContent: string, monacoTheme: string, escapedPairKey: string): string {
+export function getScript(escapedInitialContent: string, monacoTheme: string, escapedPairKey: string): string {
     return `
 var vscode = acquireVsCodeApi();
 
@@ -2207,7 +2207,7 @@ require(['vs/editor/editor.main'], function() {
     });
 
     monaco.languages.registerCompletionItemProvider('yql', {
-        triggerCharacters: [' ', '.', '\`'],
+        triggerCharacters: [' ', '.', '\`', '/'],
         provideCompletionItems: function(model, position) {
             return new Promise(function(resolve) {
                 var reqId = ++completionRequestId;
@@ -2274,7 +2274,7 @@ require(['vs/editor/editor.main'], function() {
             var lastLine = model.getLineCount();
             text = model.getLineContent(line);
             if (line < lastLine) {
-                text += '\n';
+                text += '\\n';
                 range = new monaco.Range(line, 1, line + 1, 1);
             } else {
                 range = new monaco.Range(line, 1, line, model.getLineMaxColumn(line));

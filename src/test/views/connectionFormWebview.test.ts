@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildFormHtml } from '../../views/connectionFormWebview';
+import { buildFormHtml, computeMonitoringUrl } from '../../views/connectionFormWebview';
 
 describe('buildFormHtml', () => {
     it('host input has no pre-filled value (only placeholder)', () => {
@@ -71,5 +71,63 @@ describe('buildFormHtml', () => {
         const html = buildFormHtml(false);
         expect(html).toContain('toggleRag');
         expect(html).toContain('updateRagRunningBadge');
+    });
+
+    it('form auto-derives monitoring URL from host and secure flag', () => {
+        const html = buildFormHtml(false);
+        expect(html).toContain('monitoringUrlAuto');
+        expect(html).toContain('computeMonitoringUrl');
+        expect(html).toContain(":8765");
+        expect(html).toMatch(/secure[^?]*\?\s*'https'\s*:\s*'http'/);
+        // input listener on host triggers refresh
+        expect(html).toMatch(/getElementById\('host'\)\.addEventListener\('input', refreshMonitoringUrl\)/);
+        // secure change listener triggers refresh
+        expect(html).toMatch(/getElementById\('secure'\)\.addEventListener\('change', refreshMonitoringUrl\)/);
+        // user editing monitoringUrl flips auto flag based on equality with computed
+        expect(html).toMatch(/getElementById\('monitoringUrl'\)\.addEventListener\('input'/);
+    });
+});
+
+describe('computeMonitoringUrl', () => {
+    it('uses http when secure is false', () => {
+        expect(computeMonitoringUrl('example.com', false)).toBe('http://example.com:8765');
+    });
+
+    it('uses https when secure is true', () => {
+        expect(computeMonitoringUrl('example.com', true)).toBe('https://example.com:8765');
+    });
+
+    it('returns empty string when host is empty', () => {
+        expect(computeMonitoringUrl('', true)).toBe('');
+        expect(computeMonitoringUrl('   ', false)).toBe('');
+    });
+
+    it('trims whitespace from host', () => {
+        expect(computeMonitoringUrl('  srv1  ', true)).toBe('https://srv1:8765');
+    });
+});
+
+describe('monitoring URL inline script wiring', () => {
+    it('script computes URL with the same formula as computeMonitoringUrl', () => {
+        const html = buildFormHtml(false);
+        // Verify the inline script's formula matches: (secure ? 'https' : 'http') + '://' + host + ':8765'
+        expect(html).toMatch(/secure\s*\?\s*'https'\s*:\s*'http'\s*\)\s*\+\s*':\/\/'\s*\+\s*host\s*\+\s*':8765'/);
+    });
+
+    it('script wires host input, secure change, and monitoringUrl input listeners', () => {
+        const html = buildFormHtml(false);
+        expect(html).toMatch(/getElementById\('host'\)\.addEventListener\('input', refreshMonitoringUrl\)/);
+        expect(html).toMatch(/getElementById\('secure'\)\.addEventListener\('change', refreshMonitoringUrl\)/);
+        expect(html).toMatch(/getElementById\('monitoringUrl'\)\.addEventListener\('input'/);
+    });
+
+    it('script flips auto flag based on equality with computed value', () => {
+        const html = buildFormHtml(false);
+        expect(html).toContain('monitoringUrlAuto = this.value.trim() === computeMonitoringUrl()');
+    });
+
+    it('fillForm preserves user-customized monitoring URL (auto = false)', () => {
+        const html = buildFormHtml(true);
+        expect(html).toContain("monitoringUrlAuto = currentMonitoring === '' || currentMonitoring === computeMonitoringUrl()");
     });
 });

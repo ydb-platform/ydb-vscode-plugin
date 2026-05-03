@@ -50,16 +50,7 @@ export interface DashboardMetrics {
     memoryUsed: number;
     memoryTotal: number;
     networkThroughput: number;
-    nodes: NodeInfo[];
-}
-
-export interface NodeInfo {
-    nodeId: number;
-    host: string;
-    status: string;
-    uptime: number;
-    cpuUsage: number;
-    memoryUsage: number;
+    runningQueries: number;
 }
 
 export interface QueryResult {
