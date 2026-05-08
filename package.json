@@ -24,7 +24,7 @@
     "vscode": "^1.75.0"
   },
   "categories": [
-    "Database"
+    "Other"
   ],
   "activationEvents": [
     "onView:ydbConnections",
