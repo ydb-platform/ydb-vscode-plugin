@@ -161,6 +161,7 @@ export const workspace = {
     }),
     workspaceFolders: undefined as unknown,
     textDocuments: [] as unknown[],
+    onDidChangeConfiguration: () => ({ dispose: () => {} }),
     onDidChangeTextDocument: () => ({ dispose: () => {} }),
     onDidOpenTextDocument: () => ({ dispose: () => {} }),
     onDidCloseTextDocument: () => ({ dispose: () => {} }),

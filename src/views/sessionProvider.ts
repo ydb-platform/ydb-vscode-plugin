@@ -15,13 +15,44 @@ class SessionItem extends vscode.TreeItem {
     }
 }
 
-export class SessionProvider implements vscode.TreeDataProvider<SessionItem> {
+export class SessionProvider implements vscode.TreeDataProvider<SessionItem>, vscode.Disposable {
     private readonly _onDidChangeTreeData = new vscode.EventEmitter<SessionItem | undefined | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     private hideIdle = false;
+    private autoRefreshTimer: ReturnType<typeof setInterval> | undefined;
+    private readonly configListener: vscode.Disposable;
 
-    constructor(private connectionManager: ConnectionManager) {}
+    constructor(private connectionManager: ConnectionManager) {
+        this.applyAutoRefreshConfig();
+        this.configListener = vscode.workspace.onDidChangeConfiguration((e) => {
+            if (e.affectsConfiguration('ydb.sessionsRefreshIntervalSeconds')) {
+                this.applyAutoRefreshConfig();
+            }
+        });
+    }
+
+    private applyAutoRefreshConfig(): void {
+        if (this.autoRefreshTimer !== undefined) {
+            clearInterval(this.autoRefreshTimer);
+            this.autoRefreshTimer = undefined;
+        }
+        const seconds = vscode.workspace
+            .getConfiguration('ydb')
+            .get<number>('sessionsRefreshIntervalSeconds', 10);
+        if (seconds > 0) {
+            this.autoRefreshTimer = setInterval(() => this.refresh(), seconds * 1000);
+        }
+    }
+
+    dispose(): void {
+        if (this.autoRefreshTimer !== undefined) {
+            clearInterval(this.autoRefreshTimer);
+            this.autoRefreshTimer = undefined;
+        }
+        this.configListener.dispose();
+        this._onDidChangeTreeData.dispose();
+    }
 
     refresh(): void {
         this._onDidChangeTreeData.fire();

@@ -185,6 +185,7 @@ export function activate(context: vscode.ExtensionContext): void {
         navigatorTreeView,
         vscode.window.registerTreeDataProvider('ydbDetails', detailsProvider),
         vscode.window.registerTreeDataProvider('sessionManager', sessionProvider),
+        sessionProvider,
         vscode.window.registerTreeDataProvider('permissions', permissionsProvider),
         vscode.window.registerTreeDataProvider('ydbDashboard', dashboardProvider),
         vscode.commands.registerCommand('ydb.refreshDashboard', () => dashboardProvider.refresh()),
