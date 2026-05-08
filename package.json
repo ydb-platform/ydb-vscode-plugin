@@ -3,7 +3,7 @@
   "displayName": "YDB for VS Code",
   "description": "YDB database support for Visual Studio Code",
   "version": "0.1.2",
-  "publisher": "ydb",
+  "publisher": "ydb-tech",
   "icon": "assets/icon.png",
   "repository": {
     "type": "git",
