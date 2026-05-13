@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-05-13
+
+### Fixed
+
+- **Dashboard: database-level metrics** — Dashboard now shows CPU/memory/storage/network for the active database (`/viewer/json/tenantinfo?path=<db>`) instead of cluster-wide metrics. CPU total is derived from `PoolStats.Threads`; tenant is selected by `Name` when the response lists multiple
+
 ## [0.1.3] - 2026-05-08
 
 ### Added
