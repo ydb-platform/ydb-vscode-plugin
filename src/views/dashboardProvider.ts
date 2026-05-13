@@ -175,7 +175,7 @@ export class DashboardProvider implements vscode.TreeDataProvider<vscode.TreeIte
         }
 
         try {
-            this.metrics = await fetchDashboardMetrics(monitoringUrl, this.authClient, queryService);
+            this.metrics = await fetchDashboardMetrics(monitoringUrl, profile.database, this.authClient, queryService);
             this.error = undefined;
         } catch (err: unknown) {
             this.error = err instanceof Error ? err.message : String(err);

@@ -113,7 +113,7 @@ async function showDashboard(connectionManager: ConnectionManager): Promise<void
             } catch {
                 queryService = undefined;
             }
-            const metrics = await fetchDashboardMetrics(monitoringUrl, authClient, queryService);
+            const metrics = await fetchDashboardMetrics(monitoringUrl, profile.database, authClient, queryService);
             dashboardPanel.webview.postMessage({ type: 'dashboardData', metrics });
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
@@ -127,17 +127,18 @@ async function showDashboard(connectionManager: ConnectionManager): Promise<void
 
 export async function fetchDashboardMetrics(
     monitoringUrl: string,
+    database: string,
     authClient: MonitoringAuthClient,
     queryService?: QueryService,
 ): Promise<DashboardMetrics> {
-    const viewerUrl = `${monitoringUrl}/viewer/json/cluster`;
+    const viewerUrl = `${monitoringUrl}/viewer/json/tenantinfo?path=${encodeURIComponent(database)}`;
 
-    const [clusterData, runningQueries] = await Promise.all([
+    const [tenantData, runningQueries] = await Promise.all([
         authClient.httpGet(viewerUrl),
         fetchRunningQueriesCount(queryService),
     ]);
 
-    const json = JSON.parse(clusterData);
+    const json = JSON.parse(tenantData);
 
     const metrics: DashboardMetrics = {
         cpuUsed: 0,
@@ -150,27 +151,35 @@ export async function fetchDashboardMetrics(
         runningQueries,
     };
 
-    // Parse cluster-level metrics (values come as strings from YDB Viewer API)
-    if (json.CoresUsed !== undefined) {
-        metrics.cpuUsed = parseFloat(String(json.CoresUsed)) || 0;
+    const tenants = Array.isArray(json.TenantInfo) ? json.TenantInfo : [];
+    const tenant = tenants.find((t: { Name?: string }) => t?.Name === database) ?? tenants[0];
+    if (!tenant) {
+        return metrics;
     }
-    if (json.CoresTotal !== undefined) {
-        metrics.cpuTotal = parseFloat(String(json.CoresTotal)) || 0;
+
+    if (tenant.CoresUsed !== undefined) {
+        metrics.cpuUsed = parseFloat(String(tenant.CoresUsed)) || 0;
     }
-    if (json.MemoryUsed !== undefined) {
-        metrics.memoryUsed = parseInt(String(json.MemoryUsed), 10) || 0;
+    if (Array.isArray(tenant.PoolStats)) {
+        metrics.cpuTotal = tenant.PoolStats.reduce(
+            (acc: number, pool: { Threads?: unknown }) => acc + (Number(pool?.Threads) || 0),
+            0,
+        );
     }
-    if (json.MemoryTotal !== undefined) {
-        metrics.memoryTotal = parseInt(String(json.MemoryTotal), 10) || 0;
+    if (tenant.MemoryUsed !== undefined) {
+        metrics.memoryUsed = parseInt(String(tenant.MemoryUsed), 10) || 0;
     }
-    if (json.StorageUsed !== undefined) {
-        metrics.storageUsed = parseInt(String(json.StorageUsed), 10) || 0;
+    if (tenant.MemoryLimit !== undefined) {
+        metrics.memoryTotal = parseInt(String(tenant.MemoryLimit), 10) || 0;
     }
-    if (json.StorageTotal !== undefined) {
-        metrics.storageTotal = parseInt(String(json.StorageTotal), 10) || 0;
+    if (tenant.StorageAllocatedSize !== undefined) {
+        metrics.storageUsed = parseInt(String(tenant.StorageAllocatedSize), 10) || 0;
     }
-    if (json.NetworkWriteThroughput !== undefined) {
-        metrics.networkThroughput = parseFloat(String(json.NetworkWriteThroughput)) || 0;
+    if (tenant.StorageAllocatedLimit !== undefined) {
+        metrics.storageTotal = parseInt(String(tenant.StorageAllocatedLimit), 10) || 0;
+    }
+    if (tenant.NetworkWriteThroughput !== undefined) {
+        metrics.networkThroughput = parseFloat(String(tenant.NetworkWriteThroughput)) || 0;
     }
 
     return metrics;
