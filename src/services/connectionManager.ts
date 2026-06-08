@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as tls from 'tls';
-import { Driver } from '@ydbjs/core';
+import { Driver, kRegisterLibrary } from '@ydbjs/core';
 
 const log = vscode.window.createOutputChannel('YDB Connection', { log: true });
 import { AnonymousCredentialsProvider } from '@ydbjs/auth/anonymous';
@@ -29,6 +29,26 @@ function loadYandexCloudCa(): Buffer | undefined {
 }
 
 const YANDEX_CLOUD_CA = loadYandexCloudCa();
+
+// Library name advertised to the YDB server via the SDK build-info header,
+// e.g. `x-ydb-sdk-build-info: ydb-js-sdk/<sdk>;ydb-vscode-plugin/<version>`.
+const LIBRARY_NAME = 'ydb-vscode-plugin';
+
+// Reads the extension version from the bundled package.json. After bundling,
+// extension.js lives in out/, so package.json sits one level up — mirroring the
+// way the CA certificate is resolved above.
+function loadExtensionVersion(): string {
+    try {
+        const pkgPath = path.join(__dirname, '..', 'package.json');
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+        return typeof pkg.version === 'string' ? pkg.version : '0.0.0';
+    } catch (err) {
+        log.warn(`[version] Could not read extension version: ${err instanceof Error ? err.message : String(err)}`);
+        return '0.0.0';
+    }
+}
+
+const LIBRARY_VERSION = loadExtensionVersion();
 
 function loadCustomCa(): Buffer | undefined {
     const certFile = vscode.workspace.getConfiguration('ydb').get<string>('tlsCaCertFile', '');
@@ -182,6 +202,17 @@ export class ConnectionManager {
         return { ca: bundle };
     }
 
+    /**
+     * Creates a Driver and advertises this extension to the YDB server through
+     * the SDK build-info header. All driver instances must be created here so the
+     * registration happens consistently.
+     */
+    private createDriver(connectionString: string, credentialsProvider: CredentialsProvider, secureOptions: { ca: Buffer } | undefined): Driver {
+        const driver = new Driver(connectionString, { credentialsProvider, secureOptions });
+        driver[kRegisterLibrary](LIBRARY_NAME, LIBRARY_VERSION);
+        return driver;
+    }
+
     private buildConnectionString(profile: Pick<ConnectionProfile, 'endpoint' | 'host' | 'port' | 'database' | 'secure'>): string {
         const hostPort = getEffectiveEndpoint(profile);
         return `${profile.secure ? 'grpcs' : 'grpc'}://${hostPort}${profile.database.startsWith('/') ? '' : '/'}${profile.database}`;
@@ -202,7 +233,7 @@ export class ConnectionManager {
             const connectionString = this.buildConnectionString(profile);
             const credentialsProvider = this.createCredentialsProvider(profile, connectionString);
             const secureOptions = this.getSecureOptions(profile.secure, profile.tlsCaCertFile);
-            const driver = new Driver(connectionString, { credentialsProvider, secureOptions });
+            const driver = this.createDriver(connectionString, credentialsProvider, secureOptions);
 
             await this.readyWithCancellation(driver, token);
 
@@ -318,7 +349,7 @@ export class ConnectionManager {
         const connectionString = this.buildConnectionString(profile);
         const credentialsProvider = this.createCredentialsProvider(profile, connectionString);
         const secureOptions = this.getSecureOptions(profile.secure, profile.tlsCaCertFile);
-        const driver = new Driver(connectionString, { credentialsProvider, secureOptions });
+        const driver = this.createDriver(connectionString, credentialsProvider, secureOptions);
 
         await this.readyWithCancellation(driver, token);
 
@@ -334,7 +365,7 @@ export class ConnectionManager {
         const connectionString = this.buildConnectionString(profile as ConnectionProfile);
         const credentialsProvider = this.createCredentialsProvider(profile as ConnectionProfile, connectionString);
         const secureOptions = this.getSecureOptions(profile.secure, profile.tlsCaCertFile);
-        const driver = new Driver(connectionString, { credentialsProvider, secureOptions });
+        const driver = this.createDriver(connectionString, credentialsProvider, secureOptions);
         await this.readyWithCancellation(driver);
         return driver;
     }
@@ -350,7 +381,7 @@ export class ConnectionManager {
 
         const credentialsProvider = this.createCredentialsProvider(profile as ConnectionProfile, connectionString);
         const secureOptions = this.getSecureOptions(profile.secure, profile.tlsCaCertFile);
-        const driver = new Driver(connectionString, { credentialsProvider, secureOptions });
+        const driver = this.createDriver(connectionString, credentialsProvider, secureOptions);
 
         try {
             await this.readyWithCancellation(driver, token);

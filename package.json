@@ -21,7 +21,7 @@
     "yandex"
   ],
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.94.0"
   },
   "categories": [
     "Other"
@@ -713,7 +713,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/uuid": "^10.0.0",
-    "@types/vscode": "^1.75.0",
+    "@types/vscode": "^1.94.0",
     "@typescript-eslint/eslint-plugin": "^5.53.0",
     "@typescript-eslint/parser": "^5.53.0",
     "esbuild": "^0.27.3",
@@ -727,9 +727,9 @@
     "@bufbuild/protobuf": "^2.10.0",
     "@gravity-ui/websql-autocomplete": "^13.14.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "@ydbjs/api": "^6.0.5",
-    "@ydbjs/auth": "^6.0.5",
-    "@ydbjs/core": "^6.0.7",
+    "@ydbjs/api": "^6.0.7",
+    "@ydbjs/auth": "^6.3.1",
+    "@ydbjs/core": "^6.3.1",
     "monaco-editor": "^0.55.1",
     "zod": "^4.3.6"
   }

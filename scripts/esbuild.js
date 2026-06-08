@@ -22,7 +22,7 @@ esbuild.build({
     external: ['vscode'],
     format: 'cjs',
     platform: 'node',
-    target: 'node18',
+    target: 'node20',
     sourcemap: true,
 }).then(() => {
     console.log('Extension bundled to out/extension.js');
