@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-06-09
+
+### Added
+
+- **SDK build-info advertising** — extension now registers itself with each YDB Driver via `kRegisterLibrary`, so the server sees `ydb-js-sdk/<sdk>;ydb-vscode-plugin/<version>` in the build-info header. All Driver creation is routed through a single `createDriver()` helper for consistent registration
+
+### Changed
+
+- **Bumped `@ydbjs/core` to ^6.3.1** (with matching `@ydbjs/auth` ^6.3.1 and `@ydbjs/api` ^6.0.7) — required for `kRegisterLibrary` support
+- **Declared runtime target aligned with @ydbjs** — `engines.vscode` raised to ^1.94.0 (first VS Code shipping Node 20 in Electron) and esbuild target raised to `node20`. The Node floor itself is not new — `@ydbjs` 6.0.x already required >=20.19.0 — the manifest now reflects it honestly
+
 ## [0.1.4] - 2026-05-13
 
 ### Fixed
