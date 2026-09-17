@@ -17,7 +17,7 @@ A Visual Studio Code extension for working with [YDB](https://ydb.tech/) databas
 - **Permissions viewer** — inspect ACL for database objects
 - **DDL generation** — generate CREATE statements for any database object
 - **Database load monitoring** — built-in dashboard for performance metrics
-- **MCP server** — expose your YDB connections to AI assistants (Claude Code and others)
+- **MCP server** — expose your YDB connections to AI assistants (Claude Code, OpenAI Codex, and others)
 - **YQL RAG** — semantic and keyword search over YQL documentation for AI-assisted query writing
 - **SQL dialect converter** — convert SQL dialects to YQL
 
@@ -56,7 +56,7 @@ Download the new `.vsix` from the Releases page and re-run the install command. 
 
 ## MCP Integration (AI Assistants)
 
-The extension runs a built-in [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server, which allows AI assistants such as Claude Code to query your YDB databases directly.
+The extension runs a built-in [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server, which allows AI assistants such as Claude Code and OpenAI Codex to query your YDB databases directly.
 
 ### Port configuration
 
@@ -86,6 +86,24 @@ claude mcp add --transport sse ydb http://localhost:3333/sse
 claude mcp list
 ```
 
+### Connecting OpenAI Codex
+
+1. Make sure the YDB extension is running in VS Code and at least one connection is added in the **Connections** panel.
+
+2. Register the Streamable HTTP endpoint in Codex:
+
+```bash
+codex mcp add ydb --url http://localhost:3333/mcp
+```
+
+3. Verify the connection:
+
+```bash
+codex mcp list
+```
+
+Codex CLI and the Codex IDE extension share this MCP configuration.
+
 ### Available MCP Tools
 
 | Tool | Parameters | Description |
@@ -101,7 +119,7 @@ The `connection` parameter is the connection name as shown in the Connections pa
 
 ## YQL Documentation Search (RAG)
 
-The extension can download a YQL documentation index and use it for AI-assisted query writing. When RAG is active, the `ydb_yql_help` MCP tool lets Claude Code look up the correct YQL syntax during a conversation.
+The extension can download a YQL documentation index and use it for AI-assisted query writing. When RAG is active, the `ydb_yql_help` MCP tool lets connected AI assistants look up the correct YQL syntax during a conversation.
 
 ### Enabling RAG
 
@@ -133,9 +151,9 @@ Then set the URL in VS Code settings:
 
 The Ollama status is shown directly in the connection settings form, with a **Check** button to verify availability. If Ollama is unavailable, the search automatically falls back to keyword mode.
 
-### How RAG Works in Claude Code
+### How RAG Works with AI Assistants
 
-Once RAG is enabled, Claude Code automatically calls `ydb_yql_help` before writing YQL queries. You can also ask for help directly:
+Once RAG is enabled, Claude Code or Codex can call `ydb_yql_help` before writing YQL queries. You can also ask for help directly:
 
 ```
 Show me the syntax for WINDOW functions in YQL
@@ -155,7 +173,7 @@ When you switch between connections, RAG is automatically unloaded from memory a
 
 ## Usage with dbt
 
-Claude Code connected via MCP can automatically explore the database schema when working on dbt projects. A typical workflow:
+An AI assistant connected via MCP can automatically explore the database schema when working on dbt projects. A typical workflow:
 
 1. AI calls `ydb_list_connections` to discover available connections
 2. Calls `ydb_list_all(connection="prod")` to get the full list of tables
