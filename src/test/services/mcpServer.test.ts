@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as http from 'http';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpService } from '../../services/mcpServer';
 import { ConnectionManager } from '../../services/connectionManager';
@@ -118,6 +120,28 @@ describe('McpService', () => {
             await service.start(port);
             const res = await httpGetHeaders(`http://127.0.0.1:${port}/sse`);
             expect(res.headers['content-type']).toContain('text/event-stream');
+        });
+
+        it('serves tools over Streamable HTTP for Codex', async () => {
+            await service.start(port);
+            const client = new Client({ name: 'test-client', version: '1.0.0' });
+            const transport = new StreamableHTTPClientTransport(
+                new URL(`http://127.0.0.1:${port}/mcp`),
+            );
+
+            try {
+                await client.connect(transport);
+                const result = await client.listTools();
+                expect(result.tools.map(tool => tool.name)).toContain('ydb_list_connections');
+            } finally {
+                await client.close();
+            }
+        });
+
+        it('rejects GET /mcp because the endpoint is stateless', async () => {
+            await service.start(port);
+            const res = await httpGet(`http://127.0.0.1:${port}/mcp`);
+            expect(res.statusCode).toBe(405);
         });
 
         it('returns 404 for unknown paths', async () => {

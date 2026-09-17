@@ -678,7 +678,7 @@
           "default": 3333,
           "minimum": 1024,
           "maximum": 65535,
-          "description": "Port number for the embedded MCP (Model Context Protocol) server. Connect AI tools via: claude mcp add --transport sse ydb http://localhost:<port>/sse"
+          "description": "Port number for the embedded MCP (Model Context Protocol) server. Connect Claude Code via: claude mcp add --transport sse ydb http://localhost:<port>/sse. Connect OpenAI Codex via: codex mcp add ydb --url http://localhost:<port>/mcp"
         },
         "ydb.ragOllamaUrl": {
           "type": "string",

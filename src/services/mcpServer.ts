@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { ConnectionManager } from './connectionManager';
 import { QueryService } from './queryService';
 import { SchemeService } from './schemeService';
@@ -13,7 +14,7 @@ import type { Driver } from '@ydbjs/core';
 
 /**
  * Embedded MCP server that exposes YDB connections configured in the plugin
- * to AI tools (Claude Code, etc.) via HTTP SSE transport.
+ * to AI tools via HTTP SSE and Streamable HTTP transports.
  *
  * Each tool requires an explicit `connection` parameter (the profile name from
  * the Connections panel). The server does not follow the focused connection —
@@ -21,6 +22,7 @@ import type { Driver } from '@ydbjs/core';
  *
  * Usage (after starting extension):
  *   claude mcp add --transport sse ydb http://localhost:3333/sse
+ *   codex mcp add ydb --url http://localhost:3333/mcp
  */
 export class McpService implements vscode.Disposable {
     private httpServer: http.Server | undefined;
@@ -474,6 +476,33 @@ export class McpService implements vscode.Disposable {
 
     private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
         const url = req.url ?? '/';
+
+        if (req.method === 'POST' && url === '/mcp') {
+            const mcpServer = this.createMcpServer();
+            const transport = new StreamableHTTPServerTransport({
+                sessionIdGenerator: undefined,
+                enableJsonResponse: true,
+            });
+            await mcpServer.connect(transport);
+            res.on('close', () => {
+                transport.close().catch(() => {});
+                mcpServer.close().catch(() => {});
+            });
+            await transport.handleRequest(req, res);
+            return;
+        }
+
+        if (url === '/mcp') {
+            res.writeHead(405, {
+                'Content-Type': 'application/json',
+                Allow: 'POST',
+            }).end(JSON.stringify({
+                jsonrpc: '2.0',
+                error: { code: -32000, message: 'Method not allowed.' },
+                id: null,
+            }));
+            return;
+        }
 
         if (req.method === 'GET' && url === '/sse') {
             const mcpServer = this.createMcpServer();
